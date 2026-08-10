@@ -300,8 +300,18 @@ async function synthesizeSpeech(text, speed) {
   // instructions (accent, tone, delivery) is only honored by gpt-4o-mini-tts.
   // tts-1/tts-1-hd are older fixed-delivery models, sending it there either
   // gets silently ignored or rejected depending on the day, so just don't.
+  //
+  // A bare word or two ("dominican", "calm") measurably under-steers the
+  // model, confirmed by testing: a one-word instruction came back byte-
+  // identical to no instruction at all, a fuller sentence did not. So short
+  // input gets expanded into an actual directive rather than sent as-is,
+  // the field stays free text, this just gives the model more to act on.
   if (ttsConfig.voiceStyle && ttsConfig.model === 'gpt-4o-mini-tts') {
-    payload.instructions = ttsConfig.voiceStyle;
+    const style = ttsConfig.voiceStyle.trim();
+    payload.instructions =
+      style.split(/\s+/).length <= 3
+        ? `Speak with a ${style} accent and tone, natural and clearly audible, not subtle.`
+        : style;
   }
   const resp = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
