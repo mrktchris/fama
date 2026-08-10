@@ -36,6 +36,15 @@ const { FileTailer } = require('./lib/tail');
 // set a custom header at all. Found missing entirely by external review:
 // a malicious webpage could otherwise trigger real, billable /speak calls
 // against a visitor's local Fama instance just by POSTing to it.
+//
+// This alone assumes "same-origin" is a stable, attacker-proof boundary,
+// which DNS rebinding defeats: a page can rebind its own hostname to
+// 127.0.0.1 and become same-origin with this server, at which point it CAN
+// read the token out of index.html like any other same-origin page. The
+// Host-header allowlist below (see ALLOWED_HOSTS) is what actually closes
+// that gap, by rejecting anything that didn't arrive addressed to the real
+// loopback name — found by a later, deeper security audit, this token was
+// never sufficient on its own.
 const AUTH_TOKEN = crypto.randomBytes(24).toString('hex');
 function requireAuth(req, res) {
   if (req.headers['x-fama-token'] === AUTH_TOKEN) return true;
@@ -82,21 +91,36 @@ function loadDotEnv() {
 }
 
 function writeDotEnv(config) {
+  // Every interpolated value gets newline-stripped, not just the two that
+  // used to be: an unsanitized field here lets a value containing its own
+  // "\nOPENAI_API_KEY=..." line inject a second key that loadDotEnv's
+  // last-wins parsing would treat as authoritative. Found by security audit.
+  const clean = (v) => String(v == null ? '' : v).replace(/[\r\n]+/g, ' ');
   const lines = [
     '# Written by the Fama Settings panel (the gear icon in the app).',
     '# Hand edits are fine, but hitting Save there rewrites these lines.',
     '',
-    `OPENAI_API_KEY=${config.apiKey || ''}`,
-    `OPENAI_TTS_MODEL=${config.model || 'tts-1-hd'}`,
-    `OPENAI_TTS_VOICE=${config.voice || 'alloy'}`,
-    `OPENAI_REWRITE_MODEL=${config.rewriteModel || 'gpt-4o-mini'}`,
+    `OPENAI_API_KEY=${clean(config.apiKey)}`,
+    `OPENAI_TTS_MODEL=${clean(config.model || 'tts-1-hd')}`,
+    `OPENAI_TTS_VOICE=${clean(config.voice || 'alloy')}`,
+    `OPENAI_REWRITE_MODEL=${clean(config.rewriteModel || 'gpt-4o-mini')}`,
     `OPENAI_NARRATE_REWRITE=${config.rewrite === false ? 'false' : 'true'}`,
     `OPENAI_NARRATION_SECONDS=${config.narrationSeconds || 10}`,
-    `OPENAI_NARRATION_PERSONA=${(config.narrationPersona || '').replace(/\n/g, ' ')}`,
-    `OPENAI_VOICE_STYLE=${(config.voiceStyle || '').replace(/\n/g, ' ')}`,
+    `OPENAI_NARRATION_PERSONA=${clean(config.narrationPersona)}`,
+    `OPENAI_VOICE_STYLE=${clean(config.voiceStyle)}`,
     '',
   ];
-  fs.writeFileSync(ENV_PATH, lines.join('\n'), 'utf8');
+  // 0600: this file holds a plaintext API key. `mode` only applies when the
+  // file is newly created, so chmod the existing one too on every save (a
+  // no-op on Windows, where ACLs govern instead, wrapped so that's not an
+  // error there). Matters on shared POSIX machines; Windows userData is
+  // already per-user by ACL regardless.
+  fs.writeFileSync(ENV_PATH, lines.join('\n'), { encoding: 'utf8', mode: 0o600 });
+  try {
+    fs.chmodSync(ENV_PATH, 0o600);
+  } catch {
+    // not supported on Windows, fine, ACLs handle it there
+  }
 }
 
 function envBool(value, fallback) {
@@ -436,7 +460,23 @@ function publicConfig() {
 const viewerDir = path.join(__dirname, 'viewer');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
+// Binding to 127.0.0.1 (see listen() below) stops other MACHINES, not other
+// WEBSITES: a page from any origin can rebind its own hostname's DNS record
+// to 127.0.0.1, at which point the browser considers that page same-origin
+// with this server, and the X-Fama-Token CSRF defense (which only ever
+// assumed a same-origin page could read the token, see requireAuth below)
+// is moot, because the rebound page now IS that same-origin page. The Host
+// header is the one thing page JS cannot forge, so it's the actual defense:
+// found by a security audit, confirmed independently across four separate
+// review angles, all converging on this same gap.
+const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
+
 const server = http.createServer((req, res) => {
+  if (!ALLOWED_HOSTS.has(String(req.headers.host || '').toLowerCase())) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('forbidden host');
+    return;
+  }
   if (req.url === '/events') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -505,11 +545,17 @@ const server = http.createServer((req, res) => {
     if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then((body) => {
-        const typedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
-        const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : ttsConfig.model;
-        const voice = typeof body.voice === 'string' && body.voice.trim() ? body.voice.trim() : ttsConfig.voice;
+        // Strips interior newlines too, not just leading/trailing whitespace:
+        // .trim() alone left a value like "tts-1\nOPENAI_API_KEY=..." able to
+        // inject a second line once written to .env. writeDotEnv sanitizes on
+        // the way out regardless, this additionally keeps ttsConfig itself
+        // (used live for real OpenAI calls) from ever holding one in memory.
+        const noNewlines = (s) => s.replace(/[\r\n]+/g, ' ').trim();
+        const typedKey = typeof body.apiKey === 'string' ? noNewlines(body.apiKey) : '';
+        const model = typeof body.model === 'string' && body.model.trim() ? noNewlines(body.model) : ttsConfig.model;
+        const voice = typeof body.voice === 'string' && body.voice.trim() ? noNewlines(body.voice) : ttsConfig.voice;
         const rewriteModel =
-          typeof body.rewriteModel === 'string' && body.rewriteModel.trim() ? body.rewriteModel.trim() : ttsConfig.rewriteModel;
+          typeof body.rewriteModel === 'string' && body.rewriteModel.trim() ? noNewlines(body.rewriteModel) : ttsConfig.rewriteModel;
         const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : ttsConfig.rewrite;
         const narrationSeconds =
           body.narrationSeconds !== undefined ? clampNarrationSeconds(body.narrationSeconds) : ttsConfig.narrationSeconds;

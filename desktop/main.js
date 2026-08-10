@@ -118,7 +118,15 @@ function migrateFromPreviousName() {
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
     fs.copyFileSync(oldConfig, CONFIG_PATH);
     const oldEnv = path.join(oldUserData, '.env');
-    if (fs.existsSync(oldEnv)) fs.copyFileSync(oldEnv, path.join(app.getPath('userData'), '.env'));
+    if (fs.existsSync(oldEnv)) {
+      const newEnv = path.join(app.getPath('userData'), '.env');
+      fs.copyFileSync(oldEnv, newEnv); // copyFileSync reproduces the source file's mode, so...
+      try {
+        fs.chmodSync(newEnv, 0o600); // ...re-tighten it here rather than carry forward whatever the old one had
+      } catch {
+        // not supported on Windows, fine
+      }
+    }
     const oldUsage = path.join(oldUserData, 'usage.json');
     if (fs.existsSync(oldUsage)) fs.copyFileSync(oldUsage, path.join(app.getPath('userData'), 'usage.json'));
     // Deliberately NOT carried over: desktopShortcutOffered. The old Desktop
@@ -164,10 +172,20 @@ function getPrefs() {
     launchOnStartup: typeof cfg.launchOnStartup === 'boolean' ? cfg.launchOnStartup : DEFAULT_PREFS.launchOnStartup,
   };
 }
+// Only these two keys, and only as booleans: this is reachable from the
+// renderer over IPC (see the set-app-prefs handler below), and an unfiltered
+// Object.assign of the whole request body would let that call also rewrite
+// watchDirsEncoded or any other config field, not just the two prefs this
+// bridge is meant to expose. Not exploitable today (the only real caller is
+// this app's own Settings panel), but the IPC itself should not trust its
+// caller further than its own contract, found by security audit.
+const SETTABLE_PREF_KEYS = ['notificationsEnabled', 'launchOnStartup'];
 function setPrefs(partial) {
   const cfg = loadConfig() || {};
-  const next = Object.assign(cfg, partial);
-  saveConfig(next);
+  for (const key of SETTABLE_PREF_KEYS) {
+    if (typeof partial[key] === 'boolean') cfg[key] = partial[key];
+  }
+  saveConfig(cfg);
   if (typeof partial.launchOnStartup === 'boolean') applyLoginItemSetting(partial.launchOnStartup);
   return getPrefs();
 }
