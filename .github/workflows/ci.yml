@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm install
       # The real reason this job exists: verify-package.js is the gate that
       # would have caught the v0.12.0 leak (stray dev logs shipped in a
@@ -46,3 +46,43 @@ jobs:
           name: fama-win32-x64
           path: dist-desktop/Fama-win32-x64
           retention-days: 7
+
+  windows-installer:
+    # Real NSIS installer via electron-builder, the path that's blocked
+    # locally by this project's own dev environment (a Developer-Mode /
+    # symlink-creation permission wall electron-builder's winCodeSign step
+    # hits, documented in README's Known limitations). GitHub's own runners
+    # don't carry that restriction, that's the whole reason this job exists
+    # instead of just running the same command locally.
+    #
+    # Signing: electron-builder auto-detects the CSC_LINK (base64 .pfx or a
+    # path to one) and CSC_KEY_PASSWORD secrets if they're set and signs the
+    # installer automatically, no code change needed here to turn that on.
+    # Without them it builds a real, working, unsigned installer, same as
+    # today, still real progress: an installer beats "unzip and run" even
+    # unsigned, and SmartScreen's warning is the same either way until a
+    # cert exists. Obtaining an actual code-signing certificate needs a real
+    # purchase and identity verification from a CA (or Microsoft's Trusted
+    # Signing service), which only the repo owner can do, not something any
+    # CI config can substitute for.
+    name: Windows signed installer (NSIS)
+    runs-on: windows-latest
+    needs: test
+    continue-on-error: true # experimental: unverified whether GH's runners avoid the same wall, must not block the rest of CI either way
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run dist:win
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fama-installer-nsis
+          path: dist-desktop/*.exe
+          retention-days: 7
+          if-no-files-found: warn
