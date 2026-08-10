@@ -14,7 +14,7 @@
  * zero prerequisites is a real fast-follow, not done here.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, Notification, shell } = require('electron');
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -32,18 +32,31 @@ if (!gotLock) {
   app.quit();
 }
 
-// One-click updates: checks the GitHub Releases feed for this repo (see the
-// "publish" block in package.json) on launch. Silent if there's nothing new,
-// which is the common case, only interrupts when there's an actual decision
-// to make. Does nothing at all in dev mode (unpackaged), electron-updater
-// requires a real packaged build to have anything to check against.
+// Update NOTIFICATION, not one-click auto-install, despite the name of the
+// library: checks the GitHub Releases feed for this repo (see the "publish"
+// block in package.json) on launch, silent if there's nothing new. Real bug
+// found by reviewing this project's own test logs (not by inspection): the
+// original design here called autoUpdater.downloadUpdate() /
+// autoUpdater.quitAndInstall(), which is electron-updater's NSIS-installer
+// update flow. This app ships as an unpacked electron-packager folder (see
+// the README section on why NSIS can't run in this build environment), not
+// an NSIS install, so that flow was never actually going to work end to end,
+// on top of which every check was failing outright on a missing
+// app-update.yml (electron-builder writes that automatically; electron-
+// packager has no idea electron-updater exists) and then, once that part was
+// fixed, on a missing latest.yml release asset (also an electron-builder
+// output, now hand-generated and uploaded alongside every release zip, see
+// desktop/write-update-manifest.js and the release step in README/CHANGELOG).
+// Detecting "a newer version exists" now genuinely works; opening this
+// app's own Releases page to grab it is the honest equivalent of one-click
+// for a distribution method that has no installer to auto-run.
 //
 // Listeners registered once, module scope, not inside setupAutoUpdate() (that
 // used to re-register a full set on every call, stacking duplicate dialogs
 // after the first manual "Check for updates" click). lastCheckWasManual is
-// how the update-not-available handler knows whether to say anything: silent
-// on the automatic startup check (the common case), a real dialog when you
-// actually asked.
+// how the update-not-available/error handlers know whether to say anything:
+// silent on the automatic startup check (the common case), a real dialog
+// when you actually asked.
 let lastCheckWasManual = false;
 autoUpdater.autoDownload = false;
 autoUpdater.on('update-available', (info) => {
@@ -51,28 +64,24 @@ autoUpdater.on('update-available', (info) => {
     .showMessageBox({
       type: 'info',
       title: 'Update available',
-      message: `Pico ${info.version} is available (you're on ${app.getVersion()}). Download it now?`,
-      buttons: ['Download', 'Not now'],
+      message: `Pico ${info.version} is available (you're on ${app.getVersion()}).`,
+      buttons: ['Open Releases page', 'Not now'],
       defaultId: 0,
     })
     .then((r) => {
-      if (r.response === 0) autoUpdater.downloadUpdate();
+      if (r.response === 0) shell.openExternal('https://github.com/mrktchris/pico/releases/latest');
     });
 });
-autoUpdater.on('update-downloaded', () => {
-  dialog
-    .showMessageBox({
-      type: 'info',
-      title: 'Update ready',
-      message: 'Downloaded. Restart now to finish installing?',
-      buttons: ['Restart now', 'Later'],
-      defaultId: 0,
-    })
-    .then((r) => {
-      if (r.response === 0) autoUpdater.quitAndInstall();
+autoUpdater.on('error', (err) => {
+  console.error('[autoUpdater]', err);
+  if (lastCheckWasManual) {
+    dialog.showMessageBox({
+      type: 'error',
+      title: 'Could not check for updates',
+      message: `${err.message}\n\nYou can always check manually at the Releases page.`,
     });
+  }
 });
-autoUpdater.on('error', (err) => console.error('[autoUpdater]', err));
 autoUpdater.on('update-not-available', () => {
   // Found by audit: clicking "Check for updates" when already current did
   // nothing visible, reads as broken rather than as good news.

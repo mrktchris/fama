@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first. Versions match `package.json` and the git tags each commit was made under.
 
+## 0.11.1
+
+- **Fixed auto-update, which had been silently non-functional in every packaged build since 0.7.0.** Found by reviewing this project's own test logs rather than by inspection: every launch logged an `ENOENT` on `resources/app-update.yml`, a file electron-builder normally generates automatically but electron-packager (used here, see README on why) has no idea to write. Root cause went deeper than that one file: the original design also called `autoUpdater.downloadUpdate()`/`quitAndInstall()`, electron-updater's NSIS-installer update flow, which was never going to work end to end against this app's actual distribution method (an unpacked folder, not an NSIS install). Fixed properly rather than patched around: `desktop/write-update-manifest.js` and `desktop/write-latest-yml.js` now generate both files electron-updater needs (from the real built zip's own hash, so it can't drift stale), and "Update available" now opens the Releases page instead of attempting an in-place install the distribution method can't support. Verified against a real published release, not just a local build.
+- Added `CONTRIBUTING.md`, `SECURITY.md` (including a private vulnerability-reporting path via GitHub's advisory feature), `CODE_OF_CONDUCT.md`, and GitHub issue/PR templates. First real contribution infrastructure this repo has had.
+- README's Known limitations and Roadmap sections updated to match current reality (the pin-a-session and multi-project items were already shipped and listed as pending; the update-checking limitation above is now documented instead of silently broken).
+
 ## 0.11.0
 
 - **Watch several projects at once.** Onboarding is now a checklist instead of a single pick, and the tray menu's "Manage watched projects…" reopens it later pre-checked with whatever's currently watched, so it reads as "edit the list" rather than "start over." One server process tails all of them; each event carries which project it came from.

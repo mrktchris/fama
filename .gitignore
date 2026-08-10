@@ -8,3 +8,7 @@ usage.json
 *.mp3
 .DS_Store
 Thumbs.db
+
+# Rebrand planning doc — deliberately kept out of the public repo until
+# the rename actually happens, not mine to publish ahead of that call.
+docs/brand/

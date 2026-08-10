@@ -73,10 +73,11 @@ Needs Xcode Command Line Tools (`xcode-select --install`) and Node 16+. Unsigned
 
 ## Known limitations
 
-- **It does not separate clients.** Every Claude Code session launched from the same working directory writes into the same project folder on disk, so if two unrelated threads are active at once, both narrate into the same feed. Click a lane's header to collapse one, or run separate instances against separate `CLAUDE_NARRATOR_DIR` values for real isolation.
+- **It does not separate clients.** Every Claude Code session launched from the same working directory writes into the same project folder on disk, so if two unrelated threads are active at once, both narrate into the same feed. Click a lane's header to collapse one, or watch separate projects as separate entries instead (Settings → tray → Manage watched projects) for real separation.
 - Requires Node.js installed and on PATH even in the packaged app, doesn't bundle its own runtime yet.
 - Windows only for a pre-built binary right now.
 - Subagent transcripts aren't shown yet, only top-level sessions.
+- **Update checks work, one-click install doesn't (yet).** The app correctly detects when a newer version is out and opens the Releases page for you, but it can't download-and-install itself in place: that mechanism assumes an NSIS installer, and this build ships as a plain unpacked folder (see the NSIS note below). Re-downloading and unzipping is the real update path until a signed installer exists.
 
 ## How this compares to similar tools
 
@@ -91,11 +92,14 @@ Those are audio-only, hook- or CLI-triggered. What's different here: a standalon
 ## Roadmap
 
 - [ ] Local neural TTS (Kokoro or Qwen-TTS) for genuinely near-zero latency, no cloud round trip
-- [ ] Proper signed Windows installer via GitHub Actions CI (also solves the Mac build without needing Mac hardware locally)
+- [ ] Proper signed Windows installer via GitHub Actions CI (also solves the Mac build without needing Mac hardware locally, and unlocks real one-click auto-install, see Known limitations above)
 - [ ] Subagent lanes, nested under their parent session
-- [ ] Per-lane manual "listen to this one" pin, right now it auto-follows whichever session was most recently active
-- [ ] Desktop notification when a session needs a permission decision
+- [ ] Detect when a session is specifically waiting on a permission decision, not just gone quiet, and say so in the notification differently
 - [ ] Bundle a Node runtime so the desktop app needs zero prerequisites
+
+## Contributing
+
+Issues and PRs welcome, this is a small project and every bit helps. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the code's organized, how to run it locally, and what a good PR looks like here. Found a security issue (not just a bug)? See [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
 ## License
 
