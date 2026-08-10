@@ -499,6 +499,22 @@ main#lanes {
 #usage-reset:hover { border-color: var(--error); color: var(--error); }
 .usage-breakdown { font-size: 11.5px; color: var(--muted-2); margin-top: 6px; line-height: 1.6; }
 
+.preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 10px; }
+.preset-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10.5px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.preset-chip:hover { border-color: var(--accent); color: var(--text); }
+
+.settings-field input[type="text"]:disabled { opacity: 0.4; cursor: not-allowed; }
+
 @media (max-width: 620px) {
   main#lanes { grid-template-columns: 1fr; }
 }

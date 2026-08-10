@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>claude-narrator setup</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0c; --panel: #131316; --border: #232328; --text: #ededf0;
+    --muted: #8a8a92; --muted-2: #55555e; --accent: #7aa2ff; --accent-glow: rgba(122,162,255,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", -apple-system, sans-serif; padding: 22px;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  p.sub { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; line-height: 1.5; }
+  #list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .project-option {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; cursor: pointer; text-align: left; color: var(--text);
+    font-family: inherit; font-size: 12.5px;
+  }
+  .project-option:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
+  .project-option .path { font-weight: 600; word-break: break-all; }
+  .project-option .meta { color: var(--muted-2); font-size: 11px; margin-top: 3px; }
+  #empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 30px 10px; }
+  #browse {
+    margin-top: 14px; padding: 9px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); cursor: pointer; font-size: 12.5px;
+  }
+  #browse:hover { border-color: var(--muted-2); }
+</style>
+</head>
+<body>
+  <h1>Which project should this watch?</h1>
+  <p class="sub">Claude Code sessions found on this machine, most recently active first. Pick one, this only shows what's already running, nothing about your work is sent anywhere.</p>
+  <div id="list"><div id="empty">Looking…</div></div>
+  <button id="browse" type="button">Browse for a different folder…</button>
+  <script src="onboarding.js"></script>
+</body>
+</html>

@@ -11,7 +11,26 @@
 
 (function () {
   const STORAGE_KEY = 'claude-narrator.voice';
-  const MAX_PENDING = 4; // hard cap so a burst of events can't build an ever-growing backlog
+  // Kept tight on purpose: a deep queue means a rate/settings change (or just
+  // reality) takes that many stale utterances to catch up to, which reads as
+  // "broken" even when every value is technically correct. Shallower queue,
+  // fresher feedback, also fewer wasted calls on backlog nobody's still
+  // listening for.
+  const MAX_PENDING = 2;
+
+  // Best-effort, fire-and-forget. A logging call failing shouldn't itself
+  // throw, that would just be a new silent failure hiding the first one.
+  function reportClientError(message) {
+    try {
+      fetch('/client-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      }).catch(() => {});
+    } catch {
+      // ignore
+    }
+  }
 
   function Narrator() {
     this.enabled = false;
@@ -103,10 +122,16 @@
           return;
         } catch (err) {
           // server hiccup, rate limit, bad key, whatever, fall back rather than
-          // go silent for this line
+          // go silent for this line. Reported server-side (not just console.log)
+          // since a client-only log is invisible to anyone debugging this remotely.
+          reportClientError('cloud speak failed, falling back to local: ' + (err && err.message));
         }
       }
-      await this._speakLocal(text);
+      try {
+        await this._speakLocal(text);
+      } catch (err) {
+        reportClientError('local speak failed too, this line went unheard: ' + (err && err.message));
+      }
     },
     _speakCloud(text, kind) {
       return fetch('/speak', {
@@ -138,12 +163,16 @@
         );
     },
     _speakLocal(text) {
-      if (!this.supported) return Promise.resolve();
-      return new Promise((resolve) => {
+      if (!this.supported) {
+        reportClientError('local speechSynthesis unsupported in this browser/window');
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
         const utter = new SpeechSynthesisUtterance(text);
         if (this.voice) utter.voice = this.voice;
         utter.rate = this.rate;
-        utter.onend = utter.onerror = () => resolve();
+        utter.onend = () => resolve();
+        utter.onerror = (e) => reject(new Error('speechSynthesis error: ' + (e && e.error)));
         window.speechSynthesis.speak(utter);
       });
     },

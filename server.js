@@ -63,6 +63,8 @@ function writeDotEnv(config) {
     `OPENAI_REWRITE_MODEL=${config.rewriteModel || 'gpt-4o-mini'}`,
     `OPENAI_NARRATE_REWRITE=${config.rewrite === false ? 'false' : 'true'}`,
     `OPENAI_NARRATION_SECONDS=${config.narrationSeconds || 10}`,
+    `OPENAI_NARRATION_PERSONA=${(config.narrationPersona || '').replace(/\n/g, ' ')}`,
+    `OPENAI_VOICE_STYLE=${(config.voiceStyle || '').replace(/\n/g, ' ')}`,
     '',
   ];
   fs.writeFileSync(ENV_PATH, lines.join('\n'), 'utf8');
@@ -113,6 +115,13 @@ let ttsConfig = {
   rewriteModel: process.env.OPENAI_REWRITE_MODEL || envFile.OPENAI_REWRITE_MODEL || 'gpt-4o-mini',
   rewrite: envBool(process.env.OPENAI_NARRATE_REWRITE || envFile.OPENAI_NARRATE_REWRITE, true),
   narrationSeconds: clampNarrationSeconds(process.env.OPENAI_NARRATION_SECONDS || envFile.OPENAI_NARRATION_SECONDS || 10),
+  // Free text, both optional and both blank by default. persona shapes the
+  // rewrite step's system prompt (works with any TTS model). voiceStyle is
+  // passed as OpenAI's "instructions" param, which only gpt-4o-mini-tts
+  // actually supports, tts-1/tts-1-hd silently ignore it if sent, so it's
+  // only sent when that model is selected, see synthesizeSpeech below.
+  narrationPersona: process.env.OPENAI_NARRATION_PERSONA || envFile.OPENAI_NARRATION_PERSONA || '',
+  voiceStyle: process.env.OPENAI_VOICE_STYLE || envFile.OPENAI_VOICE_STYLE || '',
 };
 
 // --- usage / spend tracking, local only, persisted to usage.json (gitignored) ---
@@ -242,6 +251,9 @@ async function rewriteForSpeech(text, kind) {
       ? 'This is raw internal reasoning, often fragmented or rambling as it is being worked out.'
       : 'This is already meant to be read by a person, just make it work as spoken audio.';
   const preset = narrationPreset(ttsConfig.narrationSeconds);
+  const personaLine = ttsConfig.narrationPersona
+    ? `Voice/persona for this rewrite: ${ttsConfig.narrationPersona}. Stay in that voice, but the length limit below is non-negotiable regardless of persona. `
+    : '';
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -255,8 +267,9 @@ async function rewriteForSpeech(text, kind) {
           role: 'system',
           content:
             "You narrate a coding agent's live activity out loud, in real time, for someone half-listening while they work on something else. " +
+            personaLine +
             `HARD LIMIT: ${preset.words} words maximum, count them as you write and stop at the limit even mid-thought. ` +
-            'Present tense, plain language, natural spoken sentences. ' +
+            'Present tense, natural spoken sentences. ' +
             'No code, no file paths, no markdown, no meta-commentary about what you are doing right now, just the plain-language gist of it. ' +
             'Reply with only the rewritten line and nothing else.',
         },
@@ -277,19 +290,26 @@ async function rewriteForSpeech(text, kind) {
 }
 
 async function synthesizeSpeech(text, speed) {
+  const payload = {
+    model: ttsConfig.model,
+    voice: ttsConfig.voice,
+    input: text,
+    response_format: 'mp3',
+    speed: clampSpeed(speed),
+  };
+  // instructions (accent, tone, delivery) is only honored by gpt-4o-mini-tts.
+  // tts-1/tts-1-hd are older fixed-delivery models, sending it there either
+  // gets silently ignored or rejected depending on the day, so just don't.
+  if (ttsConfig.voiceStyle && ttsConfig.model === 'gpt-4o-mini-tts') {
+    payload.instructions = ttsConfig.voiceStyle;
+  }
   const resp = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${ttsConfig.apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: ttsConfig.model,
-      voice: ttsConfig.voice,
-      input: text,
-      response_format: 'mp3',
-      speed: clampSpeed(speed),
-    }),
+    body: JSON.stringify(payload),
   });
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
@@ -329,6 +349,9 @@ function publicConfig() {
     narrationSeconds: ttsConfig.narrationSeconds,
     narrationMin: NARRATION_MIN_SECONDS,
     narrationMax: NARRATION_MAX_SECONDS,
+    narrationPersona: ttsConfig.narrationPersona,
+    voiceStyle: ttsConfig.voiceStyle,
+    voiceStyleSupported: ttsConfig.model === 'gpt-4o-mini-tts',
   };
 }
 
@@ -359,6 +382,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.url === '/client-error' && req.method === 'POST') {
+    readJsonBody(req)
+      .then((body) => {
+        console.error(`[client] ${(body && body.message) || 'unknown client error'}`);
+        res.writeHead(204);
+        res.end();
+      })
+      .catch(() => {
+        res.writeHead(204);
+        res.end();
+      });
+    return;
+  }
+
   if (req.url === '/usage' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(usage));
@@ -384,12 +421,14 @@ const server = http.createServer((req, res) => {
         const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : ttsConfig.rewrite;
         const narrationSeconds =
           body.narrationSeconds !== undefined ? clampNarrationSeconds(body.narrationSeconds) : ttsConfig.narrationSeconds;
+        const narrationPersona = typeof body.narrationPersona === 'string' ? body.narrationPersona.trim().slice(0, 500) : ttsConfig.narrationPersona;
+        const voiceStyle = typeof body.voiceStyle === 'string' ? body.voiceStyle.trim().slice(0, 500) : ttsConfig.voiceStyle;
         const clearKey = body.clearKey === true;
         // A blank key field means "leave whatever's already saved alone", not
         // "erase it", the only way to actually clear it is the explicit flag.
         const apiKey = clearKey ? '' : typedKey || ttsConfig.apiKey;
 
-        ttsConfig = { apiKey, model, voice, rewriteModel, rewrite, narrationSeconds };
+        ttsConfig = { apiKey, model, voice, rewriteModel, rewrite, narrationSeconds, narrationPersona, voiceStyle };
         writeDotEnv(ttsConfig);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -432,6 +471,9 @@ const server = http.createServer((req, res) => {
         }
 
         try {
+          console.log(
+            `[speak] kind=${kind} chars=${spokenText.length} speed=${body.speed || 1} model=${ttsConfig.model} narrationSeconds=${ttsConfig.narrationSeconds}`
+          );
           const audio = await synthesizeSpeech(spokenText, body.speed);
           recordUsage({
             ttsChars: spokenText.length,

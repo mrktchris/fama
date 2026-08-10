@@ -1,6 +1,8 @@
 node_modules/
 *.log
 run.pid
+electron.pid
+dist-desktop/
 .env
 usage.json
 *.mp3

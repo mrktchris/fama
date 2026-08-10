@@ -18,6 +18,9 @@
   const lengthSlider = document.getElementById('settings-length');
   const lengthReadout = document.getElementById('settings-length-readout');
   const lengthCost = document.getElementById('settings-length-cost');
+  const personaInput = document.getElementById('settings-persona');
+  const voiceStyleInput = document.getElementById('settings-voice-style');
+  const voiceStyleSupportEl = document.getElementById('voice-style-support');
   const saveBtn = document.getElementById('settings-save');
   const testBtn = document.getElementById('settings-test');
   const removeBtn = document.getElementById('settings-remove-key');
@@ -38,6 +41,24 @@
   }
   lengthSlider.addEventListener('input', updateLengthReadout);
   modelSelect.addEventListener('change', updateLengthReadout);
+
+  function updateVoiceStyleSupport() {
+    const supported = modelSelect.value === 'gpt-4o-mini-tts';
+    voiceStyleSupportEl.textContent = supported ? '' : '(only gpt-4o-mini-tts honors this, pick it above)';
+    voiceStyleInput.disabled = !supported;
+    voiceStyleInput.placeholder = supported ? 'e.g. calm British accent, dry and understated' : 'switch the model above to use this';
+  }
+  modelSelect.addEventListener('change', updateVoiceStyleSupport);
+
+  // Preset chips just fill the target field, they don't save by themselves,
+  // Save still has to be clicked, same as if you'd typed it yourself.
+  document.querySelectorAll('.preset-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const target = chip.dataset.target === 'persona' ? personaInput : voiceStyleInput;
+      target.value = chip.dataset.value || '';
+      target.focus();
+    });
+  });
 
   const usageTotalEl = document.getElementById('usage-total');
   const usageBreakdownEl = document.getElementById('usage-breakdown');
@@ -111,6 +132,9 @@
         lengthSlider.max = cfg.narrationMax || 30;
         lengthSlider.value = cfg.narrationSeconds || 10;
         updateLengthReadout();
+        personaInput.value = cfg.narrationPersona || '';
+        voiceStyleInput.value = cfg.voiceStyle || '';
+        updateVoiceStyleSupport();
         apiKeyInput.value = '';
         apiKeyInput.placeholder = cfg.cloudVoice ? 'sk-•••••••••••• (already set, leave blank to keep)' : 'sk-...';
         keyStatusEl.textContent = cfg.cloudVoice ? 'A key is currently configured.' : 'No key configured yet, using the free browser voice.';
@@ -131,6 +155,8 @@
         voice: voiceSelect.value,
         rewrite: rewriteCheckbox.checked,
         narrationSeconds: Number(lengthSlider.value),
+        narrationPersona: personaInput.value.trim(),
+        voiceStyle: voiceStyleInput.value.trim(),
       },
       extra || {}
     );

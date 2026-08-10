@@ -78,8 +78,9 @@
         <label class="settings-field">
           <span>Model</span>
           <select id="settings-model">
-            <option value="tts-1">tts-1 &middot; $15/1M chars, faster</option>
-            <option value="tts-1-hd">tts-1-hd &middot; $30/1M chars, better</option>
+            <option value="gpt-4o-mini-tts">gpt-4o-mini-tts &middot; recommended, supports accent/tone control below</option>
+            <option value="tts-1">tts-1 &middot; $15/1M chars, no style control</option>
+            <option value="tts-1-hd">tts-1-hd &middot; $30/1M chars, tested consistently slowest</option>
           </select>
         </label>
 
@@ -94,6 +95,28 @@
             <option value="shimmer">shimmer</option>
           </select>
         </label>
+
+        <label class="settings-field">
+          <span>Voice style / accent <span id="voice-style-support" class="settings-hint"></span></span>
+          <input type="text" id="settings-voice-style" spellcheck="true" placeholder="e.g. calm British accent, dry and understated">
+        </label>
+        <div class="preset-row">
+          <button type="button" class="preset-chip" data-target="voice-style" data-value="Calm, professional, understated">Calm &amp; professional</button>
+          <button type="button" class="preset-chip" data-target="voice-style" data-value="Warm, upbeat, energetic delivery">Warm &amp; upbeat</button>
+          <button type="button" class="preset-chip" data-target="voice-style" data-value="Dry British accent, deadpan delivery">Dry British</button>
+          <button type="button" class="preset-chip" data-target="voice-style" data-value="">clear</button>
+        </div>
+
+        <label class="settings-field">
+          <span>Narration persona <span class="settings-hint">shapes the rewrite step, works with any model</span></span>
+          <input type="text" id="settings-persona" spellcheck="true" placeholder="e.g. a sharp CMO giving a fast executive summary">
+        </label>
+        <div class="preset-row">
+          <button type="button" class="preset-chip" data-target="persona" data-value="A sharp CMO giving a fast, confident executive summary, no hedging, results-focused">CMO / executive</button>
+          <button type="button" class="preset-chip" data-target="persona" data-value="Catching a friend up casually, relaxed and conversational">Casual</button>
+          <button type="button" class="preset-chip" data-target="persona" data-value="A terse ops status update, just the facts, minimal words">Terse / ops</button>
+          <button type="button" class="preset-chip" data-target="persona" data-value="">clear</button>
+        </div>
 
         <label class="settings-field-inline">
           <input type="checkbox" id="settings-rewrite" class="toggle-switch" checked>
