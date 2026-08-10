@@ -95,11 +95,15 @@ Those are audio-only, hook- or CLI-triggered. What's different here: a standalon
 
 ## Roadmap
 
+- [ ] **Local LLM for the rewrite step**, not just local TTS: the condense-before-speaking pass currently always calls OpenAI (`gpt-4o-mini`) when cloud voice is on. Running that rewrite through a small local model (same family of options as the TTS one below, e.g. Ollama/llama.cpp with a small instruct model) would cut both latency and the one remaining place raw thinking text leaves the machine.
 - [ ] Local neural TTS (Kokoro or Qwen-TTS) for genuinely near-zero latency, no cloud round trip
+- [ ] **Support for coding agents other than Claude Code.** The transcript format this app parses (`lib/parse.js`) is Claude Code's own JSONL shape; watching another agent (Codex CLI, OpenCode, etc.) means a parser per format behind the same event pipeline, this doesn't currently abstract that.
 - [ ] Proper signed Windows installer via GitHub Actions CI (also solves the Mac build without needing Mac hardware locally, and unlocks real one-click auto-install, see Known limitations above)
 - [ ] Subagent lanes, nested under their parent session
 - [ ] Detect when a session is specifically waiting on a permission decision, not just gone quiet, and say so in the notification differently
 - [ ] Bundle a Node runtime so the desktop app needs zero prerequisites
+- [ ] Upgrade Electron/electron-builder (current `npm audit` reports vulnerable dependency nodes; a major-version bump needs its own dedicated test pass, not a same-day fix)
+- [ ] Automated tests (parsing, tailing, path encoding, CSRF/Host handling) and a CI pipeline that builds and scans a release from a clean checkout
 
 ## Contributing
 
