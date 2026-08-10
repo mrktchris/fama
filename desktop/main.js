@@ -18,6 +18,45 @@ const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
+
+// One-click updates: checks the GitHub Releases feed for this repo (see the
+// "publish" block in package.json) on launch. Silent if there's nothing new,
+// which is the common case, only interrupts when there's an actual decision
+// to make. Does nothing at all in dev mode (unpackaged), electron-updater
+// requires a real packaged build to have anything to check against.
+function setupAutoUpdate() {
+  if (!app.isPackaged) return;
+  autoUpdater.autoDownload = false;
+  autoUpdater.on('update-available', (info) => {
+    dialog
+      .showMessageBox({
+        type: 'info',
+        title: 'Update available',
+        message: `Aloud ${info.version} is available (you're on ${app.getVersion()}). Download it now?`,
+        buttons: ['Download', 'Not now'],
+        defaultId: 0,
+      })
+      .then((r) => {
+        if (r.response === 0) autoUpdater.downloadUpdate();
+      });
+  });
+  autoUpdater.on('update-downloaded', () => {
+    dialog
+      .showMessageBox({
+        type: 'info',
+        title: 'Update ready',
+        message: 'Downloaded. Restart now to finish installing?',
+        buttons: ['Restart now', 'Later'],
+        defaultId: 0,
+      })
+      .then((r) => {
+        if (r.response === 0) autoUpdater.quitAndInstall();
+      });
+  });
+  autoUpdater.on('error', (err) => console.error('[autoUpdater]', err));
+  autoUpdater.checkForUpdates().catch((err) => console.error('[autoUpdater] check failed', err));
+}
 
 const PORT = 4317;
 const ROOT = path.join(__dirname, '..');
@@ -159,7 +198,7 @@ function openMainWindow() {
     minWidth: 420,
     minHeight: 400,
     backgroundColor: '#0a0a0c',
-    title: 'claude-narrator',
+    title: 'Aloud',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: { contextIsolation: true, spellcheck: true, autoplayPolicy: 'no-user-gesture-required' },
   });
@@ -187,7 +226,7 @@ function openOnboardingWindow() {
     height: 560,
     resizable: false,
     backgroundColor: '#0a0a0c',
-    title: 'claude-narrator setup',
+    title: 'Aloud setup',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -219,11 +258,12 @@ function createTray() {
   } catch {
     return; // icon missing or platform quirk, tray is a nice-to-have, not load-bearing
   }
-  tray.setToolTip('claude-narrator');
+  tray.setToolTip('Aloud');
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Show', click: () => (mainWindow ? mainWindow.show() : openMainWindow()) },
       { label: 'Change watched project…', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
+      { label: 'Check for updates…', click: () => setupAutoUpdate() },
       { type: 'separator' },
       { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
     ])
@@ -239,6 +279,7 @@ app.whenReady().then(() => {
   } else {
     openOnboardingWindow();
   }
+  setupAutoUpdate();
 });
 
 // Deliberately no window-all-closed handler. The main window hides instead of

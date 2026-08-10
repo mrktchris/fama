@@ -1,27 +1,37 @@
 {
-  "name": "claude-narrator",
-  "version": "0.6.0",
-  "description": "A local, zero-dependency live viewer for what Claude Code is doing right now. Tails your own .claude session transcripts, no API calls, no extra token cost.",
+  "name": "aloud",
+  "version": "0.7.0",
+  "description": "Hear your Claude Code agent think, out loud, live, as it works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
   "main": "desktop/main.js",
   "bin": {
-    "claude-narrator": "server.js"
+    "aloud": "server.js"
   },
   "scripts": {
     "start": "node server.js",
     "electron": "electron .",
-    "dist:win": "electron-builder --win"
+    "dist:win": "electron-builder --win nsis --publish never",
+    "dist:win-dir": "electron-builder --win dir --publish never",
+    "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1"
   },
   "license": "MIT",
   "engines": {
     "node": ">=16"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/csierra172/aloud.git"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
   "devDependencies": {
     "electron": "^33.4.11",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "electron-packager": "^17.1.2"
   },
   "build": {
-    "appId": "com.chrissierra.claude-narrator",
-    "productName": "claude-narrator",
+    "appId": "com.chrissierra.aloud",
+    "productName": "Aloud",
     "directories": {
       "output": "dist-desktop"
     },
@@ -34,11 +44,17 @@
       "!dist-desktop"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "desktop/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "csierra172",
+      "repo": "aloud"
     }
   }
 }
