@@ -1,0 +1,27 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fama icon mark: bronze ring, verdigris waveform, small wing ticks and
+       a bronze drop below, matching the brand brief's Icon Mark reference.
+       Used as favicon, and as the source for desktop/generate-icon.ps1's
+       .ico build. -->
+  <circle cx="32" cy="30" r="30" fill="#1A1510"/>
+  <!-- wing ticks flanking the ring -->
+  <g stroke="#B9853F" stroke-width="1.8" stroke-linecap="round">
+    <line x1="1" y1="26" x2="9" y2="25"/>
+    <line x1="2" y1="31" x2="10" y2="31"/>
+    <line x1="4" y1="36" x2="11" y2="34.5"/>
+    <line x1="63" y1="26" x2="55" y2="25"/>
+    <line x1="62" y1="31" x2="54" y2="31"/>
+    <line x1="60" y1="36" x2="53" y2="34.5"/>
+  </g>
+  <circle cx="32" cy="30" r="21" fill="none" stroke="#B9853F" stroke-width="2.5"/>
+  <g stroke="#3FA894" stroke-width="2.5" stroke-linecap="round" fill="none">
+    <line x1="15" y1="30" x2="15" y2="30"/>
+    <line x1="20" y1="25" x2="20" y2="35"/>
+    <line x1="25" y1="19" x2="25" y2="41"/>
+    <line x1="32" y1="12" x2="32" y2="48"/>
+    <line x1="39" y1="19" x2="39" y2="41"/>
+    <line x1="44" y1="25" x2="44" y2="35"/>
+    <line x1="49" y1="30" x2="49" y2="30"/>
+  </g>
+  <circle cx="32" cy="56" r="3.2" fill="#B9853F"/>
+</svg>

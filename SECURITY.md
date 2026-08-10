@@ -17,7 +17,7 @@ Include, if you can:
 
 ## What counts
 
-Pico runs entirely on your own machine (`127.0.0.1` only, never bound to your LAN) and its only outbound network calls are to OpenAI's API, and only when you've configured your own key for the optional cloud voice. Given that scope, things worth reporting include:
+Fama runs entirely on your own machine (`127.0.0.1` only, never bound to your LAN) and its only outbound network calls are to OpenAI's API, and only when you've configured your own key for the optional cloud voice. Given that scope, things worth reporting include:
 
 - A way to reach the local server from something other than the loopback interface
 - A way to bypass the CSRF token check on a mutating request

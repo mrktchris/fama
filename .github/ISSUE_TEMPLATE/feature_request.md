@@ -1,13 +1,13 @@
 ---
 name: Feature request
-about: An idea for something Pico doesn't do yet
+about: An idea for something Fama doesn't do yet
 title: ''
 labels: enhancement
 assignees: ''
 ---
 
 **What's the problem this solves?**
-What are you trying to do that Pico doesn't support right now?
+What are you trying to do that Fama doesn't support right now?
 
 **What you'd want instead**
 Describe the feature or change. Rough is fine, doesn't need to be a full spec.

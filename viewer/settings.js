@@ -32,17 +32,17 @@
   const desktopAppSection = document.getElementById('desktop-app-section');
   const notificationsCheckbox = document.getElementById('settings-notifications');
   const launchStartupCheckbox = document.getElementById('settings-launch-startup');
-  if (window.picoDesktop) {
+  if (window.famaDesktop) {
     desktopAppSection.classList.remove('hidden');
-    window.picoDesktop.getPrefs().then((prefs) => {
+    window.famaDesktop.getPrefs().then((prefs) => {
       notificationsCheckbox.checked = prefs.notificationsEnabled;
       launchStartupCheckbox.checked = prefs.launchOnStartup;
     });
     notificationsCheckbox.addEventListener('change', () => {
-      window.picoDesktop.setPrefs({ notificationsEnabled: notificationsCheckbox.checked });
+      window.famaDesktop.setPrefs({ notificationsEnabled: notificationsCheckbox.checked });
     });
     launchStartupCheckbox.addEventListener('change', () => {
-      window.picoDesktop.setPrefs({ launchOnStartup: launchStartupCheckbox.checked });
+      window.famaDesktop.setPrefs({ launchOnStartup: launchStartupCheckbox.checked });
     });
   }
 
@@ -122,7 +122,7 @@
 
   usageResetBtn.addEventListener('click', () => {
     if (!confirm('Reset the usage counter to $0.00? This only zeroes the local tracker, it has no effect on your actual OpenAI billing.')) return;
-    fetch('/usage/reset', { method: 'POST', headers: { 'X-Pico-Token': window.__PICO_TOKEN__ || '' } }).then(refreshUsage);
+    fetch('/usage/reset', { method: 'POST', headers: { 'X-Fama-Token': window.__FAMA_TOKEN__ || '' } }).then(refreshUsage);
   });
 
   function open() {
@@ -189,7 +189,7 @@
     );
     return fetch('/settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Pico-Token': window.__PICO_TOKEN__ || '' },
+      headers: { 'Content-Type': 'application/json', 'X-Fama-Token': window.__FAMA_TOKEN__ || '' },
       body: JSON.stringify(body),
     })
       .then((r) => r.json())

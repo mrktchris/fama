@@ -1,17 +1,17 @@
 {
-  "name": "pico",
-  "version": "0.11.1",
-  "description": "A quick pico of what your Claude Code agent is thinking, live, as it works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
+  "name": "fama",
+  "version": "0.12.0",
+  "description": "The house that hears everything and speaks it back, live, as your Claude Code agent works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
   "main": "desktop/main.js",
   "bin": {
-    "pico": "server.js"
+    "fama": "server.js"
   },
   "scripts": {
     "start": "node server.js",
     "electron": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:win-dir": "electron-builder --win dir --publish never",
-    "dist:win-packager": "electron-packager . Pico --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false",
+    "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false",
     "postdist:win-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js",
     "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1"
   },
@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mrktchris/pico.git"
+    "url": "https://github.com/mrktchris/fama.git"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"
@@ -32,8 +32,8 @@
     "electron-packager": "^17.1.2"
   },
   "build": {
-    "appId": "com.chrissierra.pico",
-    "productName": "Pico",
+    "appId": "com.chrissierra.fama",
+    "productName": "Fama",
     "directories": {
       "output": "dist-desktop"
     },
@@ -56,7 +56,7 @@
     "publish": {
       "provider": "github",
       "owner": "mrktchris",
-      "repo": "pico"
+      "repo": "fama"
     }
   }
 }

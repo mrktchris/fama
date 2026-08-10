@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Pico desktop shell (Electron).
+ * Fama desktop shell (Electron).
  *
  * This does NOT reimplement the server, it spawns the existing server.js as a
  * child process (same code path as `npm start`, already tested) and points a
@@ -64,12 +64,12 @@ autoUpdater.on('update-available', (info) => {
     .showMessageBox({
       type: 'info',
       title: 'Update available',
-      message: `Pico ${info.version} is available (you're on ${app.getVersion()}).`,
+      message: `Fama ${info.version} is available (you're on ${app.getVersion()}).`,
       buttons: ['Open Releases page', 'Not now'],
       defaultId: 0,
     })
     .then((r) => {
-      if (r.response === 0) shell.openExternal('https://github.com/mrktchris/pico/releases/latest');
+      if (r.response === 0) shell.openExternal('https://github.com/mrktchris/fama/releases/latest');
     });
 });
 autoUpdater.on('error', (err) => {
@@ -100,6 +100,40 @@ const PORT = 4317;
 const ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_PREFS = { notificationsEnabled: true, launchOnStartup: false };
+
+// Rename continuity: app.getPath('userData') is derived from productName
+// (see package.json), so renaming Pico -> Fama moves every existing user's
+// config.json AND .env (their real OpenAI key) to a brand new folder the app
+// has never looked in, which reads as "it forgot everything" on update. This
+// runs once, synchronously, before anything else touches CONFIG_PATH: if the
+// new folder has no config yet but the old Pico folder does, copy config.json
+// and .env across (never delete the old copy, this is a copy not a move, in
+// case something goes wrong reading it back).
+function migrateFromPreviousName() {
+  if (fs.existsSync(CONFIG_PATH)) return; // already has its own config, nothing to migrate
+  const oldUserData = path.join(path.dirname(app.getPath('userData')), 'Pico');
+  const oldConfig = path.join(oldUserData, 'config.json');
+  if (!fs.existsSync(oldConfig)) return; // no prior Pico install on this machine
+  try {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.copyFileSync(oldConfig, CONFIG_PATH);
+    const oldEnv = path.join(oldUserData, '.env');
+    if (fs.existsSync(oldEnv)) fs.copyFileSync(oldEnv, path.join(app.getPath('userData'), '.env'));
+    const oldUsage = path.join(oldUserData, 'usage.json');
+    if (fs.existsSync(oldUsage)) fs.copyFileSync(oldUsage, path.join(app.getPath('userData'), 'usage.json'));
+    // Deliberately NOT carried over: desktopShortcutOffered. The old Desktop
+    // shortcut (if one exists) points at "Pico.lnk" and the old exe path,
+    // both wrong now, so this rename gets exactly one fresh offer under the
+    // new name instead of silently keeping a stale/broken shortcut forever.
+    const migrated = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    delete migrated.desktopShortcutOffered;
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(migrated, null, 2), 'utf8');
+    console.log('[migrate] carried over config/.env/usage from the previous Pico install');
+  } catch (err) {
+    console.error('[migrate] failed to carry over previous config', err);
+  }
+}
+migrateFromPreviousName();
 
 let serverProcess = null;
 let mainWindow = null;
@@ -280,9 +314,9 @@ async function startServer(watchDirsEncoded) {
     // that gets packaged/zipped/reinstalled.
     env: Object.assign({}, process.env, {
       PORT: String(PORT),
-      PICO_ENV_PATH: path.join(app.getPath('userData'), '.env'),
+      FAMA_ENV_PATH: path.join(app.getPath('userData'), '.env'),
       CLAUDE_NARRATOR_DIRS: JSON.stringify(projectDirs),
-      PICO_PROJECT_LABELS: JSON.stringify(projectLabels),
+      FAMA_PROJECT_LABELS: JSON.stringify(projectLabels),
     }),
     windowsHide: true,
   });
@@ -296,8 +330,8 @@ async function startServer(watchDirsEncoded) {
   // window, no dialog. This is the single most likely first-run dead end.
   serverProcess.on('error', (err) => {
     dialog.showErrorBox(
-      'Pico could not start',
-      `Failed to launch the local server: ${err.message}\n\nThis usually means Node.js isn't installed or isn't on your PATH. Get it from nodejs.org, then relaunch Pico.`
+      'Fama could not start',
+      `Failed to launch the local server: ${err.message}\n\nThis usually means Node.js isn't installed or isn't on your PATH. Get it from nodejs.org, then relaunch Fama.`
     );
   });
 }
@@ -334,7 +368,7 @@ function notify(title, body) {
 function handleNotifyEvent(evt) {
   if (evt.kind === 'system') return;
   if (evt.kind === 'error') {
-    notify('Pico', evt.detail || evt.label || 'Something went wrong in a session.');
+    notify('Fama', evt.detail || evt.label || 'Something went wrong in a session.');
     return;
   }
   const sid = evt.sessionId;
@@ -348,7 +382,7 @@ function handleNotifyEvent(evt) {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {
     if (entry.count >= IDLE_NOTIFY_MIN_EVENTS) {
-      notify('Pico', 'Claude looks done for now, quiet for a bit after some activity.');
+      notify('Fama', 'Claude looks done for now, quiet for a bit after some activity.');
     }
     sessionActivity.delete(sid);
   }, IDLE_NOTIFY_MS);
@@ -407,7 +441,7 @@ function openMainWindow() {
     minWidth: 420,
     minHeight: 400,
     backgroundColor: '#0a0a0c',
-    title: 'Pico',
+    title: 'Fama',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       contextIsolation: true,
@@ -440,7 +474,7 @@ function openOnboardingWindow() {
     height: 560,
     resizable: false,
     backgroundColor: '#0a0a0c',
-    title: 'Pico setup',
+    title: 'Fama setup',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -496,11 +530,11 @@ ipcMain.handle('set-app-prefs', (event, partial) => setPrefs(partial || {}));
 // the same mechanism Windows shortcuts (.lnk) are made with, no extra tools.
 function desktopShortcutPath() {
   const desktop = path.join(app.getPath('home'), 'Desktop');
-  return path.join(desktop, 'Pico.lnk');
+  return path.join(desktop, 'Fama.lnk');
 }
 function createDesktopShortcut() {
   if (!app.isPackaged) return Promise.resolve(false); // dev mode: nothing sane to point a shortcut at
-  const target = process.execPath; // Pico.exe itself, icon is already embedded at package time
+  const target = process.execPath; // Fama.exe itself, icon is already embedded at package time
   const linkPath = desktopShortcutPath();
   const psCommand =
     `$s = New-Object -ComObject WScript.Shell; ` +
@@ -530,7 +564,7 @@ function offerDesktopShortcut() {
   }
   createDesktopShortcut().then((ok) => {
     saveConfig(Object.assign({}, loadConfig(), { desktopShortcutOffered: true }));
-    if (ok) notify('Pico', 'Added a Pico shortcut to your Desktop.');
+    if (ok) notify('Fama', 'Added a Fama shortcut to your Desktop.');
   });
 }
 
@@ -540,7 +574,7 @@ function createTray() {
   } catch {
     return; // icon missing or platform quirk, tray is a nice-to-have, not load-bearing
   }
-  tray.setToolTip('Pico');
+  tray.setToolTip('Fama');
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Show', click: () => (mainWindow ? mainWindow.show() : openMainWindow()) },

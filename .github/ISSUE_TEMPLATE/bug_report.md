@@ -24,7 +24,7 @@ A clear description of what went wrong.
 - Node version (if running from source): `node -v`
 
 **Relevant log output**
-The server console (the terminal Pico was started from, or `desktop/main.js`'s console for the Electron shell) is usually the most useful thing to paste here. **Please redact any API key first** — it should never appear in normal logs, but double-check before pasting.
+The server console (the terminal Fama was started from, or `desktop/main.js`'s console for the Electron shell) is usually the most useful thing to paste here. **Please redact any API key first** — it should never appear in normal logs, but double-check before pasting.
 
 ```
 paste here

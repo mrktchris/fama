@@ -62,7 +62,7 @@ function renderProjects(projects) {
   for (const p of projects) addRow(p);
 }
 
-Promise.all([window.narratorSetup.listProjects(), window.narratorSetup.getCurrentProjects()]).then(([projects, current]) => {
+Promise.all([window.famaSetup.listProjects(), window.famaSetup.getCurrentProjects()]).then(([projects, current]) => {
   // Reopened later ("Manage watched projects…" from the tray) instead of
   // first-run: pre-check whatever's already being watched so this reads as
   // "edit your selection", not "start over".
@@ -78,7 +78,7 @@ Promise.all([window.narratorSetup.listProjects(), window.narratorSetup.getCurren
 });
 
 browseBtn.addEventListener('click', async () => {
-  const picked = await window.narratorSetup.pickFolder();
+  const picked = await window.famaSetup.pickFolder();
   if (!picked) return;
   checkedEncoded.add(picked.encoded);
   if (!known.has(picked.encoded)) {
@@ -99,5 +99,5 @@ continueBtn.addEventListener('click', () => {
   if (!checkedEncoded.size) return;
   continueBtn.disabled = true;
   continueBtn.textContent = 'Starting…';
-  window.narratorSetup.confirmProjects([...checkedEncoded]);
+  window.famaSetup.confirmProjects([...checkedEncoded]);
 });

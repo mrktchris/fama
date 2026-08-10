@@ -1,26 +1,28 @@
-# Pico
+# Fama
 
 **Hear your Claude Code agent think, out loud, live, as it works.**
 
+In Ovid, Fama lives in a house at the center of the world, built of resounding bronze — no doors, a thousand openings, every sound that enters is caught and sent back out, instantly, without rest. That's the mechanism this app borrows: it tails a live transcript and speaks it back to you as it happens. The myth's Fama mixes lies in with the truth; this one doesn't — it only repeats what's real, nothing invented, nothing sent anywhere it shouldn't be.
+
 A local, always-on window into what Claude Code is actually doing right now: what it's thinking, which tool it just ran, what came back. Local-first by design: it tails the session transcript files Claude Code already writes on your own machine, no required API calls, no cloud dependency to even open it. Optional cloud voice if you want it to sound less robotic, with a persona and accent you control.
 
-**Privacy, plainly:** the dashboard is 100% local, always. It reads files already on your own disk and never phones home, no account, no telemetry, no analytics, nothing installed or running unless you started it. It works completely offline. The *only* thing that ever leaves your machine is the cloud voice, and that's opt-in, off by default, using your own OpenAI key billed to your own account, never Pico's. Turn it off and nothing at all leaves your device, ever. See [Voice, in detail](#voice-in-detail) below for exactly what's sent when it's on.
+**Privacy, plainly:** the dashboard is 100% local, always. It reads files already on your own disk and never phones home, no account, no telemetry, no analytics, nothing installed or running unless you started it. It works completely offline. The *only* thing that ever leaves your machine is the cloud voice, and that's opt-in, off by default, using your own OpenAI key billed to your own account, never Fama's. Turn it off and nothing at all leaves your device, ever. See [Voice, in detail](#voice-in-detail) below for exactly what's sent when it's on.
 
 ![screenshot placeholder: main dashboard with lanes and mascot](docs/screenshot-dashboard.png)
 <!-- Real screenshots go here before this ships anywhere public. Run the app, capture: (1) the main dashboard with a lane or two active, (2) the Settings panel open, (3) the tray icon / native window. Drop them in docs/ with these exact filenames and the placeholders above resolve automatically. -->
 
 ## Why
 
-Claude Code already streams everything it does into the chat pane. But that view disappears the moment you switch windows, and there's no ambient way to glance at several active sessions at once, let alone hear it while you're looking elsewhere. Pico is a second, always-visible surface for that same activity: pin it on a second monitor, or run it as a real desktop app, and know what's happening without keeping the chat pane in focus.
+Claude Code already streams everything it does into the chat pane. But that view disappears the moment you switch windows, and there's no ambient way to glance at several active sessions at once, let alone hear it while you're looking elsewhere. Fama is a second, always-visible surface for that same activity: pin it on a second monitor, or run it as a real desktop app, and know what's happening without keeping the chat pane in focus.
 
 ## Quick start
 
-**Desktop app (Windows):** grab the latest release, unzip, run `Pico.exe`. See [Releases](../../releases). Windows will show a SmartScreen warning on first launch (unsigned build, see below), click through it.
+**Desktop app (Windows):** grab the latest release, unzip, run `Fama.exe`. See [Releases](../../releases). Windows will show a SmartScreen warning on first launch (unsigned build, see below), click through it.
 
 **From source (any OS with Node):**
 ```
-git clone https://github.com/mrktchris/pico.git
-cd pico
+git clone https://github.com/mrktchris/fama.git
+cd fama
 npm start
 ```
 Then open http://localhost:4317.
@@ -61,15 +63,15 @@ Two real API calls happen per spoken line when the rewrite step is on (a short c
 
 **Mac:** not pre-built, buildable yourself from source:
 ```
-git clone https://github.com/mrktchris/pico.git
-cd pico
+git clone https://github.com/mrktchris/fama.git
+cd fama
 npm install
 npm run electron        # test it first, dev mode
 npx electron-builder --mac --publish never
 ```
 Needs Xcode Command Line Tools (`xcode-select --install`) and Node 16+. Unsigned, so macOS Gatekeeper will block it the first time, right-click the app → Open, once, to approve it.
 
-**Updates:** the packaged app checks this repo's GitHub Releases on launch and offers a one-click download + restart-to-install when a newer version is out. Nothing automatic without your click.
+**Updates:** the packaged app checks this repo's GitHub Releases on launch and, if something newer is out, offers to open the Releases page for you. It can't install itself in place yet (see Known limitations below), so "one-click" currently means one click to get to the download, not a fully automatic update. Nothing happens without your click either way.
 
 ## Known limitations
 
@@ -87,7 +89,7 @@ This isn't the first tool that gives Claude Code a voice. Worth knowing about be
 - **[agent-tts](https://github.com/kiliman/agent-tts)** — real-time TTS for multiple agent CLIs (Claude, OpenCode, others), several provider backends.
 - **Claude Code Narrator** — local Kokoro neural TTS, no cloud at all, sub-50ms synthesis.
 
-Those are audio-only, hook- or CLI-triggered. What's different here: a standalone visual dashboard *and* voice together, a rewrite step that condenses raw reasoning instead of reading it verbatim, persona/accent control, a packaged desktop app with auto-update rather than a CLI plugin, and a live cost tracker. Fair to say this sits at a different point in the space, not that the space was empty.
+Those are audio-only, hook- or CLI-triggered. What's different here: a standalone visual dashboard *and* voice together, a rewrite step that condenses raw reasoning instead of reading it verbatim, persona/accent control, a packaged desktop app with an update checker rather than a CLI plugin, and a live cost tracker. Fair to say this sits at a different point in the space, not that the space was empty.
 
 ## Roadmap
 

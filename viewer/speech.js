@@ -10,8 +10,10 @@
 // local voice for that one line instead of going silent.
 
 (function () {
-  const STORAGE_KEY = 'pico.voice';
-  const LEGACY_STORAGE_KEY = 'claude-narrator.voice'; // one-time migration, see _restoreVoice
+  const STORAGE_KEY = 'fama.voice';
+  // Renamed twice now (claude-narrator -> Pico -> Fama), oldest first so a
+  // pre-Pico install still migrates forward correctly, see _restoreVoice.
+  const LEGACY_STORAGE_KEYS = ['pico.voice', 'claude-narrator.voice'];
   // Kept tight on purpose: a deep queue means a rate/settings change (or just
   // reality) takes that many stale utterances to catch up to, which reads as
   // "broken" even when every value is technically correct. Shallower queue,
@@ -25,7 +27,7 @@
     try {
       fetch('/client-error', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Pico-Token': window.__PICO_TOKEN__ || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Fama-Token': window.__FAMA_TOKEN__ || '' },
         body: JSON.stringify({ message }),
       }).catch(() => {});
     } catch {
@@ -76,11 +78,14 @@
       let saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) {
         // Carry forward a pre-rename choice instead of silently dropping back
-        // to the default voice on this update.
-        saved = localStorage.getItem(LEGACY_STORAGE_KEY);
-        if (saved) {
-          localStorage.setItem(STORAGE_KEY, saved);
-          localStorage.removeItem(LEGACY_STORAGE_KEY);
+        // to the default voice on this update, whichever name it was saved under.
+        for (const legacyKey of LEGACY_STORAGE_KEYS) {
+          saved = localStorage.getItem(legacyKey);
+          if (saved) {
+            localStorage.setItem(STORAGE_KEY, saved);
+            localStorage.removeItem(legacyKey);
+            break;
+          }
         }
       }
       if (!saved) return;
@@ -155,7 +160,7 @@
       const isStale = () => generation !== this._generation;
       return fetch('/speak', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Pico-Token': window.__PICO_TOKEN__ || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Fama-Token': window.__FAMA_TOKEN__ || '' },
         body: JSON.stringify({ text, kind, speed: this.rate }),
         signal: this._controller.signal,
       })

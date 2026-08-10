@@ -1,51 +1,56 @@
 # Generates desktop/icon.ico (multi-res, for the exe/taskbar/window) and
 # desktop/icon.png (256x256, for the tray) purely with .NET System.Drawing,
-# no external tools or paid image-gen credits needed. Draws the same mascot
-# shape used in viewer/index.html so the app icon actually matches the UI.
+# no external tools or paid image-gen credits needed. Draws the Fama icon
+# mark (bronze ring, verdigris waveform, oxide ground) so this matches
+# viewer/icon-mark.svg, the same mark used for the app's own favicon.
 
 Add-Type -AssemblyName System.Drawing
 
-function New-MascotBitmap([int]$size) {
-  # Chirp's mascot: a small round bird, matching viewer/index.html's SVG so the
-  # app icon and the in-app mascot are visibly the same character, not two
-  # unrelated logos.
+function New-IconMarkBitmap([int]$size) {
   $bmp = New-Object System.Drawing.Bitmap($size, $size)
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
   $g.Clear([System.Drawing.Color]::Transparent)
 
   $s = $size / 64.0
-  $panel = [System.Drawing.Color]::FromArgb(255, 0x17, 0x17, 0x1b)
-  $border = [System.Drawing.Color]::FromArgb(255, 0x35, 0x35, 0x3c)
-  $accent = [System.Drawing.Color]::FromArgb(255, 0x7a, 0xa2, 0xff)
-  $tool = [System.Drawing.Color]::FromArgb(255, 0xff, 0xb4, 0x54)
-  $eyeColor = [System.Drawing.Color]::FromArgb(255, 0xed, 0xed, 0xf0)
+  $oxide = [System.Drawing.Color]::FromArgb(255, 0x1a, 0x15, 0x10)
+  $bronze = [System.Drawing.Color]::FromArgb(255, 0xb9, 0x85, 0x3f)
+  $verdigris = [System.Drawing.Color]::FromArgb(255, 0x3f, 0xa8, 0x94)
 
-  function Pt([double]$x, [double]$y) {
-    return New-Object System.Drawing.PointF(($x * $s), ($y * $s))
+  # oxide disc, fills the whole icon so it reads clearly on any Windows theme
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush($oxide)), 1 * $s, 0 * $s, 62 * $s, 60 * $s)
+
+  # small wing ticks flanking the ring, and a bronze drop below, matching
+  # the brand brief's Icon Mark reference image
+  $wingPen = New-Object System.Drawing.Pen($bronze, [Math]::Max(1.2, 1.8 * $s))
+  $wingPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $wingPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $g.DrawLine($wingPen, (1 * $s), (26 * $s), (9 * $s), (25 * $s))
+  $g.DrawLine($wingPen, (2 * $s), (31 * $s), (10 * $s), (31 * $s))
+  $g.DrawLine($wingPen, (4 * $s), (36 * $s), (11 * $s), (34.5 * $s))
+  $g.DrawLine($wingPen, (63 * $s), (26 * $s), (55 * $s), (25 * $s))
+  $g.DrawLine($wingPen, (62 * $s), (31 * $s), (54 * $s), (31 * $s))
+  $g.DrawLine($wingPen, (60 * $s), (36 * $s), (53 * $s), (34.5 * $s))
+
+  # bronze ring, the artifact
+  $ringPen = New-Object System.Drawing.Pen($bronze, [Math]::Max(1.5, 2.5 * $s))
+  $g.DrawEllipse($ringPen, (11 * $s), (9 * $s), (42 * $s), (42 * $s))
+
+  # verdigris waveform, the live signal, seven bars of varying height forming
+  # a simple soundwave silhouette across the middle of the ring
+  $barHeights = @(0, 5, 11, 18, 11, 5, 0)   # half-heights, mirrored above/below center
+  $xs = @(15, 20, 25, 32, 39, 44, 49)
+  $wavePen = New-Object System.Drawing.Pen($verdigris, [Math]::Max(1.4, 2.5 * $s))
+  $wavePen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $wavePen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  for ($i = 0; $i -lt $xs.Count; $i++) {
+    $x = $xs[$i] * $s
+    $h = [Math]::Max(1, $barHeights[$i]) * $s
+    $g.DrawLine($wavePen, $x, (30 * $s - $h), $x, (30 * $s + $h))
   }
 
-  # wing, drawn first so the body overlaps its base
-  $wing = [System.Drawing.PointF[]]@((Pt 18 32), (Pt 6 36), (Pt 11 50), (Pt 21 47), (Pt 23 36))
-  $g.FillPolygon((New-Object System.Drawing.SolidBrush($panel)), $wing)
-  $g.DrawPolygon((New-Object System.Drawing.Pen($border, [Math]::Max(1, 1.5 * $s))), $wing)
-
-  # body: a soft rounded blob approximated with a filled ellipse, simplest
-  # reliable way to get this shape out of System.Drawing without a full bezier path
-  $bodyRect = New-Object System.Drawing.RectangleF (10 * $s), (6 * $s), (44 * $s), (54 * $s)
-  $g.FillEllipse((New-Object System.Drawing.SolidBrush($panel)), $bodyRect)
-  $g.DrawEllipse((New-Object System.Drawing.Pen($border, [Math]::Max(1, 2 * $s))), $bodyRect)
-
-  # crest
-  $crest = [System.Drawing.PointF[]]@((Pt 27 6), (Pt 22 -3), (Pt 33 1))
-  $g.FillPolygon((New-Object System.Drawing.SolidBrush($accent)), $crest)
-
-  # beak
-  $beak = [System.Drawing.PointF[]]@((Pt 50 30), (Pt 61 34), (Pt 50 39))
-  $g.FillPolygon((New-Object System.Drawing.SolidBrush($tool)), $beak)
-
-  # eye
-  $g.FillEllipse((New-Object System.Drawing.SolidBrush($eyeColor)), (34.8 * $s), (21.8 * $s), (8.4 * $s), (8.4 * $s))
+  # bronze drop, the wax-seal-like anchor point below the ring
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush($bronze)), (29 * $s), (53 * $s), (6 * $s), (6 * $s))
 
   $g.Dispose()
   return $bmp
@@ -54,14 +59,14 @@ function New-MascotBitmap([int]$size) {
 $outDir = "C:\Users\User\Documents\Claude\Projects\claude-narrator\desktop"
 
 # tray icon, flat PNG
-$png256 = New-MascotBitmap 256
+$png256 = New-IconMarkBitmap 256
 $png256.Save("$outDir\icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
 
 # multi-res ICO, modern format embeds PNG-compressed frames directly
 $sizes = @(16, 32, 48, 128, 256)
 $pngBytesBySize = @{}
 foreach ($sz in $sizes) {
-  $bmp = New-MascotBitmap $sz
+  $bmp = New-IconMarkBitmap $sz
   $ms = New-Object System.IO.MemoryStream
   $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
   $pngBytesBySize[$sz] = $ms.ToArray()

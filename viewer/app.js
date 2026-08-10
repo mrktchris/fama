@@ -42,20 +42,23 @@ const voiceRateEl = document.getElementById('voice-rate');
 const voiceRateReadoutEl = document.getElementById('voice-rate-readout');
 
 // --- client-side prefs that persist across reloads, no server round trip ---
-const PREFS_KEY = 'pico.prefs';
-const LEGACY_PREFS_KEY = 'claude-narrator.prefs'; // one-time migration, see below
+const PREFS_KEY = 'fama.prefs';
+// Renamed three times now (claude-narrator -> Aloud -> Pico -> Fama), oldest
+// first so a very old install still migrates forward correctly.
+const LEGACY_PREFS_KEYS = ['pico.prefs', 'claude-narrator.prefs'];
 function loadPrefs() {
   try {
     const current = localStorage.getItem(PREFS_KEY);
     if (current) return JSON.parse(current) || {};
-    // Renamed across the claude-narrator -> Aloud -> Pico passes; carry
-    // forward whatever a returning user already had instead of silently
-    // resetting their thinking/tools/speed prefs on this update.
-    const legacy = localStorage.getItem(LEGACY_PREFS_KEY);
-    if (legacy) {
-      localStorage.setItem(PREFS_KEY, legacy);
-      localStorage.removeItem(LEGACY_PREFS_KEY);
-      return JSON.parse(legacy) || {};
+    // Carry forward whatever a returning user already had instead of
+    // silently resetting their thinking/tools/speed prefs on this update.
+    for (const legacyKey of LEGACY_PREFS_KEYS) {
+      const legacy = localStorage.getItem(legacyKey);
+      if (legacy) {
+        localStorage.setItem(PREFS_KEY, legacy);
+        localStorage.removeItem(legacyKey);
+        return JSON.parse(legacy) || {};
+      }
     }
     return {};
   } catch {
@@ -172,10 +175,19 @@ function updateEmptyHint() {
 // same localStorage pattern as prefs. A session's own first prompt still
 // supplies the default title, this only overrides it once you've actually
 // renamed one.
-const SESSION_NAMES_KEY = 'pico.session-names';
+const SESSION_NAMES_KEY = 'fama.session-names';
+const LEGACY_SESSION_NAMES_KEY = 'pico.session-names'; // this feature only ever existed under the Pico name, one migration is enough
 function loadSessionNames() {
   try {
-    return JSON.parse(localStorage.getItem(SESSION_NAMES_KEY)) || {};
+    const current = localStorage.getItem(SESSION_NAMES_KEY);
+    if (current) return JSON.parse(current) || {};
+    const legacy = localStorage.getItem(LEGACY_SESSION_NAMES_KEY);
+    if (legacy) {
+      localStorage.setItem(SESSION_NAMES_KEY, legacy);
+      localStorage.removeItem(LEGACY_SESSION_NAMES_KEY);
+      return JSON.parse(legacy) || {};
+    }
+    return {};
   } catch {
     return {};
   }

@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Pico
+ * Fama
  * Local live viewer for Claude Code activity. Tails the JSONL session
  * transcripts Claude Code already writes under ~/.claude/projects/<encoded-cwd>/
  * and streams normalized events to a browser over Server-Sent Events.
@@ -35,10 +35,10 @@ const { FileTailer } = require('./lib/tail');
 // extract it, and a plain <form> POST (the classic no-JS CSRF vector) can't
 // set a custom header at all. Found missing entirely by external review:
 // a malicious webpage could otherwise trigger real, billable /speak calls
-// against a visitor's local Pico instance just by POSTing to it.
+// against a visitor's local Fama instance just by POSTing to it.
 const AUTH_TOKEN = crypto.randomBytes(24).toString('hex');
 function requireAuth(req, res) {
-  if (req.headers['x-pico-token'] === AUTH_TOKEN) return true;
+  if (req.headers['x-fama-token'] === AUTH_TOKEN) return true;
   res.writeHead(403, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'missing or invalid token' }));
   return false;
@@ -51,11 +51,11 @@ const { eventsFromRecord } = require('./lib/parse');
 // folder, which then means every Settings save writes a live API key
 // straight into a directory that gets zipped/uploaded/reinstalled with the
 // app itself. That's exactly how a real key ended up inside a public GitHub
-// release asset. desktop/main.js now passes PICO_ENV_PATH pointing at
+// release asset. desktop/main.js now passes FAMA_ENV_PATH pointing at
 // Electron's actual per-user data directory when running packaged; this only
 // falls back to sitting next to server.js for the plain `npm start` /
 // source-checkout case, where that's the correct, expected place for it.
-const ENV_PATH = process.env.PICO_ENV_PATH || path.join(__dirname, '.env');
+const ENV_PATH = process.env.FAMA_ENV_PATH || path.join(__dirname, '.env');
 
 // --- tiny .env loader/writer, no dependency needed for something this small ---
 function loadDotEnv() {
@@ -83,7 +83,7 @@ function loadDotEnv() {
 
 function writeDotEnv(config) {
   const lines = [
-    '# Written by the Pico Settings panel (the gear icon in the app).',
+    '# Written by the Fama Settings panel (the gear icon in the app).',
     '# Hand edits are fine, but hitting Save there rewrites these lines.',
     '',
     `OPENAI_API_KEY=${config.apiKey || ''}`,
@@ -215,7 +215,7 @@ function resolveWatchDir() {
 }
 
 // Multiple projects at once: the desktop shell passes JSON arrays of
-// absolute dirs + friendly labels (CLAUDE_NARRATOR_DIRS / PICO_PROJECT_LABELS,
+// absolute dirs + friendly labels (CLAUDE_NARRATOR_DIRS / FAMA_PROJECT_LABELS,
 // see desktop/main.js). CLI mode (no Electron) still watches exactly the one
 // project it was launched from, wrapped as a one-entry array so the rest of
 // the pipeline doesn't need two code paths. Each project gets a stable id
@@ -225,7 +225,7 @@ function resolveWatchProjects() {
     let dirs, labels;
     try {
       dirs = JSON.parse(process.env.CLAUDE_NARRATOR_DIRS);
-      labels = process.env.PICO_PROJECT_LABELS ? JSON.parse(process.env.PICO_PROJECT_LABELS) : [];
+      labels = process.env.FAMA_PROJECT_LABELS ? JSON.parse(process.env.FAMA_PROJECT_LABELS) : [];
     } catch {
       dirs = [];
     }
@@ -235,7 +235,7 @@ function resolveWatchProjects() {
   }
   // Single-project fallback: env override or the cwd-derived default.
   const dir = resolveWatchDir();
-  const name = process.env.PICO_PROJECT_LABEL || path.basename(process.cwd());
+  const name = process.env.FAMA_PROJECT_LABEL || path.basename(process.cwd());
   return [{ id: '0', dir, name }];
 }
 
@@ -434,7 +434,7 @@ function publicConfig() {
 // --- http server ------------------------------------------------------
 
 const viewerDir = path.join(__dirname, 'viewer');
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
 const server = http.createServer((req, res) => {
   if (req.url === '/events') {
@@ -620,7 +620,7 @@ const server = http.createServer((req, res) => {
     // a cross-origin fetch can't read this response body to extract it.
     if (path.basename(filePath) === 'index.html') {
       data = Buffer.from(
-        data.toString('utf8').replace('</head>', `<script>window.__PICO_TOKEN__=${JSON.stringify(AUTH_TOKEN)};</script></head>`)
+        data.toString('utf8').replace('</head>', `<script>window.__FAMA_TOKEN__=${JSON.stringify(AUTH_TOKEN)};</script></head>`)
       );
     }
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
@@ -639,7 +639,7 @@ server.on('error', (err) => {
 // Bind to loopback only. This feed includes file paths, thinking, and tool
 // output, it has no business being reachable from anything else on the LAN.
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Pico watching: ${watchProjects.map((p) => `${p.name} (${p.dir})`).join(', ')}`);
+  console.log(`Fama watching: ${watchProjects.map((p) => `${p.name} (${p.dir})`).join(', ')}`);
   console.log(
     `voice: ${
       ttsConfig.apiKey

@@ -1,4 +1,4 @@
-# Contributing to Pico
+# Contributing to Fama
 
 Thanks for even considering it, this is a small project maintained in spare time, so contributions genuinely move it forward.
 
@@ -11,8 +11,8 @@ For anything more than a small fix, open an issue first to talk through the appr
 No build step, no bundler, plain Node.
 
 ```
-git clone https://github.com/mrktchris/pico.git
-cd pico
+git clone https://github.com/mrktchris/fama.git
+cd fama
 npm install       # only pulls electron-updater + dev tooling, the server itself is dependency-free
 npm start
 ```
@@ -53,6 +53,6 @@ This project's house rule, learned the hard way more than once: **if you can ver
 
 ## Reporting bugs
 
-Open a GitHub issue. Include: what you expected, what happened instead, your OS, and whether you're running from source or a packaged build. A copy of the relevant server console output (the terminal Pico was started from, or `desktop/main.js`'s console if running the Electron shell) is usually the single most useful thing you can paste in.
+Open a GitHub issue. Include: what you expected, what happened instead, your OS, and whether you're running from source or a packaged build. A copy of the relevant server console output (the terminal Fama was started from, or `desktop/main.js`'s console if running the Electron shell) is usually the single most useful thing you can paste in.
 
 Found something that looks like a security issue (credential exposure, injection, anything like that) rather than a regular bug? Please see [SECURITY.md](SECURITY.md) instead of a public issue.
