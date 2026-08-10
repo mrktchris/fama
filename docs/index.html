@@ -54,6 +54,14 @@
     box-shadow: 0 24px 60px -24px rgba(0,0,0,.6); display: block; margin: 0 0 12px;
   }
   .shot-caption { font-size: 12.5px; color: var(--muted-2); text-align: center; margin-bottom: 40px; }
+  .shot-pending {
+    width: 100%; aspect-ratio: 16/9; border-radius: 14px; border: 1px dashed var(--border);
+    background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; margin: 0 0 12px; color: var(--muted-2);
+  }
+  .shot-pending .icon { font-size: 22px; opacity: 0.6; }
+  .shot-pending .label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .shot-pending .path { font-family: var(--mono); font-size: 11px; }
 
   .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
   .feature {
@@ -108,11 +116,21 @@
 <section>
   <div class="wrap">
     <h2>See it, hear it</h2>
-    <img class="shot" src="screenshot-dashboard.png" alt="Aloud dashboard showing live session lanes">
+    <div class="shot-pending" id="shot-dashboard">
+      <div class="icon">&#128421;</div>
+      <div class="label">Screenshot coming</div>
+      <div class="path">docs/screenshot-dashboard.png</div>
+    </div>
     <p class="shot-caption">The live dashboard: one lane per active Claude Code session, updating in real time.</p>
-    <img class="shot" src="screenshot-settings.png" alt="Aloud settings panel">
+    <div class="shot-pending" id="shot-settings">
+      <div class="icon">&#9881;</div>
+      <div class="label">Screenshot coming</div>
+      <div class="path">docs/screenshot-settings.png</div>
+    </div>
     <p class="shot-caption">Voice, persona, and accent, all configurable, with a live cost estimate as you adjust.</p>
-    <!-- Replace the two src attributes above with real screenshots in this same docs/ folder before sharing this page. -->
+    <!-- Drop real PNGs at docs/screenshot-dashboard.png and docs/screenshot-settings.png, then replace each
+         .shot-pending div above with <img class="shot" src="screenshot-dashboard.png" alt="..."> (and same
+         for settings). Until then this renders as an intentional placeholder, not a broken image icon. -->
   </div>
 </section>
 
