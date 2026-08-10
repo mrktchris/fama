@@ -1,6 +1,6 @@
 {
   "name": "claude-narrator",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "A local, zero-dependency live viewer for what Claude Code is doing right now. Tails your own .claude session transcripts, no API calls, no extra token cost.",
   "main": "server.js",
   "bin": {

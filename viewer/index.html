@@ -32,13 +32,10 @@
     <h1>claude&#8203;-narrator</h1>
     <span id="status">connecting&hellip;</span>
 
-    <div id="voice-panel">
-      <button id="voice-toggle" type="button">&#128264; enable voice</button>
+    <div id="header-actions">
       <span id="voice-mode" title="Which voice backend is active"></span>
-      <label><input type="checkbox" id="speak-thinking" checked><span>thinking</span></label>
-      <label><input type="checkbox" id="speak-tools"><span>tools</span></label>
-      <select id="voice-select" title="Fallback / free voice"></select>
-      <input type="range" id="voice-rate" min="0.6" max="1.6" step="0.1" value="1" title="Speech rate">
+      <button id="voice-toggle" type="button">&#128264; enable voice</button>
+      <button id="settings-toggle" type="button" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
   </header>
 
@@ -50,8 +47,97 @@
     <p class="empty-sub">Start or continue a Claude Code session in this project. It shows up here within a second, and reads itself out loud once voice is on.</p>
   </div>
 
+  <div id="settings-overlay" class="settings-overlay hidden">
+    <div class="settings-modal" role="dialog" aria-label="Settings">
+      <div class="settings-modal-header">
+        <h2>Settings</h2>
+        <button id="settings-close" type="button" aria-label="Close">&times;</button>
+      </div>
+
+      <section class="settings-section" id="usage-section">
+        <h3>Usage <span class="settings-hint">this OpenAI key, this machine, since the number was last reset</span></h3>
+        <div class="usage-stat">
+          <span class="usage-amount" id="usage-total">$0.00</span>
+          <button type="button" id="usage-reset" title="Reset this counter to zero">reset</button>
+        </div>
+        <div class="usage-breakdown" id="usage-breakdown">no calls yet</div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Cloud voice <span class="settings-hint">optional, costs a small amount per line</span></h3>
+
+        <label class="settings-field">
+          <span>OpenAI API key</span>
+          <div class="key-input-row">
+            <input type="password" id="settings-api-key" placeholder="sk-...">
+            <button type="button" id="settings-key-toggle" title="Show/hide">&#128065;</button>
+          </div>
+        </label>
+        <div id="settings-key-status" class="settings-key-status"></div>
+
+        <label class="settings-field">
+          <span>Model</span>
+          <select id="settings-model">
+            <option value="tts-1">tts-1 &middot; $15/1M chars, faster</option>
+            <option value="tts-1-hd">tts-1-hd &middot; $30/1M chars, better</option>
+          </select>
+        </label>
+
+        <label class="settings-field">
+          <span>Voice</span>
+          <select id="settings-voice">
+            <option value="alloy">alloy</option>
+            <option value="echo">echo</option>
+            <option value="fable">fable</option>
+            <option value="onyx">onyx</option>
+            <option value="nova">nova</option>
+            <option value="shimmer">shimmer</option>
+          </select>
+        </label>
+
+        <label class="settings-field-inline">
+          <input type="checkbox" id="settings-rewrite" class="toggle-switch" checked>
+          <span>Summarize before speaking <span class="settings-hint">turns raw thinking into a short natural line instead of reading it verbatim</span></span>
+        </label>
+
+        <label class="settings-field">
+          <span>How much it says <span id="settings-length-readout" class="settings-hint"></span></span>
+          <input type="range" id="settings-length" min="3" max="30" step="1" value="10">
+          <span id="settings-length-cost" class="settings-hint"></span>
+        </label>
+
+        <div class="settings-actions">
+          <button type="button" id="settings-save" class="primary">Save</button>
+          <button type="button" id="settings-test">Hear a test line</button>
+          <button type="button" id="settings-remove-key" class="danger">Remove key</button>
+        </div>
+        <div id="settings-save-status" class="settings-save-status"></div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Speed &amp; fallback voice</h3>
+        <label class="settings-field">
+          <span>Speech rate <span id="voice-rate-readout" class="settings-hint">1.0&times;</span></span>
+          <input type="range" id="voice-rate" min="0.6" max="1.8" step="0.05" value="1">
+          <span class="settings-hint">Applies live, no Save needed, governs both the cloud voice and the fallback below.</span>
+        </label>
+        <label class="settings-field">
+          <span>Browser voice <span class="settings-hint">free, used if cloud isn't configured or a call fails</span></span>
+          <select id="voice-select"></select>
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h3>What gets spoken</h3>
+        <label class="settings-field-inline"><input type="checkbox" id="speak-thinking" class="toggle-switch" checked><span>Thinking</span></label>
+        <label class="settings-field-inline"><input type="checkbox" id="speak-tools" class="toggle-switch"><span>Tool calls</span></label>
+      </section>
+    </div>
+  </div>
+
   <script src="/mascot.js"></script>
   <script src="/speech.js"></script>
   <script src="/app.js"></script>
+  <script src="/settings.js"></script>
 </body>
 </html>

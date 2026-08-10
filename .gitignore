@@ -2,6 +2,7 @@ node_modules/
 *.log
 run.pid
 .env
+usage.json
 *.mp3
 .DS_Store
 Thumbs.db

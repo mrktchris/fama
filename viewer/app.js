@@ -17,16 +17,40 @@ const KIND_META = {
 };
 
 const narrator = new Narrator();
+window.narrator = narrator; // settings.js drives it directly (test button, refresh after save)
+
 let mostRecentSessionId = null;
 let speakingLaneEl = null;
 
 const speakThinkingEl = document.getElementById('speak-thinking');
 const speakToolsEl = document.getElementById('speak-tools');
 const voiceToggleEl = document.getElementById('voice-toggle');
+const voiceModeEl = document.getElementById('voice-mode');
 const voiceSelectEl = document.getElementById('voice-select');
 const voiceRateEl = document.getElementById('voice-rate');
+const voiceRateReadoutEl = document.getElementById('voice-rate-readout');
 
-// --- voice controls -------------------------------------------------------
+// --- client-side prefs that persist across reloads, no server round trip ---
+const PREFS_KEY = 'claude-narrator.prefs';
+function loadPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+function savePrefs(patch) {
+  const next = Object.assign(loadPrefs(), patch);
+  localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+}
+const prefs = loadPrefs();
+if (typeof prefs.speakThinking === 'boolean') speakThinkingEl.checked = prefs.speakThinking;
+if (typeof prefs.speakTools === 'boolean') speakToolsEl.checked = prefs.speakTools;
+if (typeof prefs.rate === 'number') voiceRateEl.value = prefs.rate;
+speakThinkingEl.addEventListener('change', () => savePrefs({ speakThinking: speakThinkingEl.checked }));
+speakToolsEl.addEventListener('change', () => savePrefs({ speakTools: speakToolsEl.checked }));
+
+// --- voice controls -----------------------------------------------------
 
 narrator.onStateChange = (isSpeaking) => {
   window.mascot.setSpeaking(isSpeaking);
@@ -48,15 +72,6 @@ function refreshVoiceButton() {
   voiceToggleEl.classList.toggle('active', narrator.enabled);
 }
 
-const voiceModeEl = document.getElementById('voice-mode');
-narrator.ready.then(({ cloud, model }) => {
-  voiceModeEl.textContent = cloud ? `OpenAI · ${model}` : 'free (Windows voice)';
-  voiceModeEl.classList.toggle('cloud', cloud);
-  voiceModeEl.title = cloud
-    ? `Using OpenAI text-to-speech (${model}), server-side, costs a small amount per line`
-    : 'No OPENAI_API_KEY configured, using your browser/OS built-in voice, completely free';
-});
-
 voiceToggleEl.addEventListener('click', () => {
   if (!narrator.supported) {
     voiceToggleEl.textContent = 'speech not supported here';
@@ -68,6 +83,18 @@ voiceToggleEl.addEventListener('click', () => {
   refreshVoiceButton();
 });
 refreshVoiceButton();
+
+function updateVoiceModeBadge() {
+  narrator.refreshConfig().then((cfg) => {
+    voiceModeEl.textContent = cfg.cloud ? `OpenAI · ${cfg.model} · ~${cfg.narrationSeconds}s` : 'free (Windows voice)';
+    voiceModeEl.classList.toggle('cloud', cfg.cloud);
+    voiceModeEl.title = cfg.cloud
+      ? `Using OpenAI text-to-speech (${cfg.model}, ${cfg.voice}), server-side, costs a small amount per line`
+      : 'No key configured, using your browser/OS built-in voice, completely free';
+  });
+}
+window.updateVoiceModeBadge = updateVoiceModeBadge;
+narrator.ready.then(() => updateVoiceModeBadge());
 
 function populateVoices() {
   const voices = narrator.listVoices();
@@ -88,8 +115,15 @@ if (narrator.supported) {
   populateVoices();
 }
 voiceSelectEl.addEventListener('change', () => narrator.setVoiceByName(voiceSelectEl.value));
+
+function applyRate(value) {
+  narrator.rate = Number(value);
+  voiceRateReadoutEl.textContent = narrator.rate.toFixed(2) + '×';
+}
+applyRate(voiceRateEl.value); // pick up the restored pref (or the HTML default) immediately
 voiceRateEl.addEventListener('input', () => {
-  narrator.rate = Number(voiceRateEl.value);
+  applyRate(voiceRateEl.value);
+  savePrefs({ rate: narrator.rate });
 });
 
 function truncateForSpeech(text, max) {
@@ -99,7 +133,7 @@ function truncateForSpeech(text, max) {
   return (lastStop > max * 0.4 ? cut.slice(0, lastStop + 1) : cut) + '…';
 }
 
-// --- lanes ------------------------------------------------------------
+// --- lanes ----------------------------------------------------------------
 
 function updateEmptyHint() {
   emptyHintEl.style.display = lanes.size === 0 ? 'block' : 'none';
@@ -113,7 +147,8 @@ function laneFor(sessionId) {
   el.className = 'lane';
   el.innerHTML =
     '<div class="lane-header"><span class="lane-live-dot"></span>' +
-    '<span class="lane-title">session ' + key.slice(0, 8) + '</span></div>' +
+    '<span class="lane-title" title="session ' + key + '">session ' + key.slice(0, 12) + '</span>' +
+    '<span class="lane-current-badge">attached</span></div>' +
     '<div class="lane-feed"></div>';
   lanesEl.prepend(el);
 
@@ -131,6 +166,16 @@ function laneFor(sessionId) {
   lanes.set(key, lane);
   updateEmptyHint();
   return lane;
+}
+
+// "Attached" marks whichever session is most recently active, i.e. whichever
+// one would speak next. It's the honest answer to "which thread are you on":
+// this tool has no way to know which Claude Code window has your focus, only
+// which one is actually doing something right now.
+function markCurrentLane() {
+  for (const l of lanes.values()) l.el.classList.remove('is-current');
+  const current = lanes.get(mostRecentSessionId || 'unknown');
+  if (current) current.el.classList.add('is-current');
 }
 
 function addRow(lane, evt) {
@@ -170,15 +215,17 @@ function handleVoiceAndMascot(evt) {
     window.mascot.pulseThinking();
     // Thinking fires often and is lower priority than a real narrated line,
     // only speak it when nothing else is already queued, so it reflects the
-    // CURRENT thought instead of reading a backlog of stale ones.
+    // CURRENT thought instead of reading a backlog of stale ones. The server
+    // rewrite step (when on) also keeps each line short, so this empties out
+    // fast instead of falling behind.
     if (isFocused && speakThinkingEl.checked && narrator.pending === 0) {
-      narrator.say(truncateForSpeech(evt.detail, 200));
+      narrator.say(truncateForSpeech(evt.detail, 350), 'thinking');
     }
   } else if (evt.kind === 'tool') {
     window.mascot.pulseTool(evt.label);
-    if (isFocused && speakToolsEl.checked) narrator.say('running ' + evt.label);
+    if (isFocused && speakToolsEl.checked) narrator.say('running ' + evt.label, 'tool');
   } else if (evt.kind === 'text' && isFocused) {
-    narrator.say(truncateForSpeech(evt.detail, 280));
+    narrator.say(truncateForSpeech(evt.detail, 500), 'text');
   }
 }
 
@@ -204,8 +251,12 @@ source.onmessage = (e) => {
     statusEl.textContent = evt.detail;
     return;
   }
-  if (evt.sessionId) mostRecentSessionId = evt.sessionId;
-  addRow(laneFor(evt.sessionId), evt);
+  const lane = laneFor(evt.sessionId);
+  if (evt.sessionId && evt.sessionId !== mostRecentSessionId) {
+    mostRecentSessionId = evt.sessionId;
+    markCurrentLane();
+  }
+  addRow(lane, evt);
   handleVoiceAndMascot(evt);
 };
 

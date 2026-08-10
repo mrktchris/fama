@@ -2,8 +2,9 @@
 
 // Two voice backends behind one interface:
 //  - local: window.speechSynthesis, the browser/OS built-in voice, free.
-//  - cloud: fetches /speak (server-side OpenAI TTS), used only if the server
-//    reports a key is configured via /config.
+//  - cloud: fetches /speak (server-side OpenAI TTS, optionally rewritten
+//    into a short natural sentence first), used only if the server reports
+//    a key is configured.
 // say() always resolves through one serialized chain so cloud and local
 // utterances never overlap, and a failed cloud request falls back to the
 // local voice for that one line instead of going silent.
@@ -27,13 +28,7 @@
       this._restoreVoice();
     }
 
-    this.ready = fetch('/config')
-      .then((r) => r.json())
-      .then((cfg) => {
-        this.cloudVoice = !!cfg.cloudVoice;
-        return { cloud: this.cloudVoice, model: cfg.model || null };
-      })
-      .catch(() => ({ cloud: false, model: null }));
+    this.ready = this.refreshConfig();
   }
 
   Narrator.prototype = {
@@ -57,6 +52,23 @@
       const v = this.listVoices().find((v) => v.name === saved);
       if (v) this.voice = v;
     },
+    // Re-pulls /config, called on load and again after Settings saves so the
+    // rest of the UI can reflect a change without a page reload.
+    refreshConfig() {
+      return fetch('/config')
+        .then((r) => r.json())
+        .then((cfg) => {
+          this.cloudVoice = !!cfg.cloudVoice;
+          return {
+            cloud: this.cloudVoice,
+            model: cfg.model || null,
+            voice: cfg.voice || null,
+            rewrite: !!cfg.rewrite,
+            narrationSeconds: cfg.narrationSeconds || null,
+          };
+        })
+        .catch(() => ({ cloud: false, model: null, voice: null, rewrite: false, narrationSeconds: null }));
+    },
     enable() {
       // Browsers refuse programmatic audio, speech AND <audio>, until a real
       // user gesture has unlocked it once. This click handler is that gesture,
@@ -71,23 +83,23 @@
       this.enabled = false;
       this.stop();
     },
-    say(text) {
+    say(text, kind) {
       if (!this.enabled || !text) return;
       if (this.pending >= MAX_PENDING) return; // drop, this is a live feed, not a transcript to catch up on
       this.pending += 1;
       this.onStateChange && this.onStateChange(true);
       this._chain = this._chain
-        .then(() => this._speakOne(text))
+        .then(() => this._speakOne(text, kind))
         .catch(() => {}) // one bad utterance shouldn't jam the chain for the next one
         .then(() => {
           this.pending = Math.max(0, this.pending - 1);
           this.onStateChange && this.onStateChange(this.pending > 0);
         });
     },
-    async _speakOne(text) {
+    async _speakOne(text, kind) {
       if (this.cloudVoice) {
         try {
-          await this._speakCloud(text);
+          await this._speakCloud(text, kind);
           return;
         } catch (err) {
           // server hiccup, rate limit, bad key, whatever, fall back rather than
@@ -96,11 +108,11 @@
       }
       await this._speakLocal(text);
     },
-    _speakCloud(text) {
+    _speakCloud(text, kind) {
       return fetch('/speak', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, kind, speed: this.rate }),
       })
         .then((resp) => {
           if (!resp.ok) throw new Error('tts request failed: ' + resp.status);

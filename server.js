@@ -7,11 +7,17 @@
  * transcripts Claude Code already writes under ~/.claude/projects/<encoded-cwd>/
  * and streams normalized events to a browser over Server-Sent Events.
  *
- * Two voice modes:
- *  - free (default): the browser's own speechSynthesis, zero cost, zero setup.
- *  - cloud (opt-in): OpenAI text-to-speech, needs OPENAI_API_KEY in a local
- *    .env file, costs a small amount per character. See .env.example.
- * The free path always works. Cloud only activates if a key is present.
+ * Voice, two layers, both optional and both degrade gracefully:
+ *  - synthesis: free browser speechSynthesis, or OpenAI TTS if a key is
+ *    configured (Settings panel in the UI, or a hand-edited .env).
+ *  - rewrite: when cloud voice is on, thinking/text gets a quick pass through
+ *    a cheap chat model first, turning raw internal-monologue prose into a
+ *    short natural spoken line, instead of reading it verbatim. Target length
+ *    is user-controlled (narrationSeconds: 5/10/20), longer means more words
+ *    survive the rewrite and more characters get synthesized, which is
+ *    directly more credits, the tradeoff is intentional and shown in the UI.
+ * Nothing here is required. With zero configuration this is still a fully
+ * working, zero-cost, zero-API local tool.
  */
 
 const http = require('http');
@@ -20,14 +26,17 @@ const path = require('path');
 const { FileTailer } = require('./lib/tail');
 const { eventsFromRecord } = require('./lib/parse');
 
-// --- tiny .env loader, no dependency needed for something this small ---
+const ENV_PATH = path.join(__dirname, '.env');
+
+// --- tiny .env loader/writer, no dependency needed for something this small ---
 function loadDotEnv() {
   let content;
   try {
-    content = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+    content = fs.readFileSync(ENV_PATH, 'utf8');
   } catch {
-    return; // no .env, fine, cloud voice just stays off
+    return {}; // no .env, fine, cloud voice just stays off until Settings writes one
   }
+  const values = {};
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
@@ -38,24 +47,121 @@ function loadDotEnv() {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-    if (!(key in process.env)) process.env[key] = value;
+    values[key] = value;
+  }
+  return values;
+}
+
+function writeDotEnv(config) {
+  const lines = [
+    '# Written by the claude-narrator Settings panel (the gear icon in the app).',
+    '# Hand edits are fine, but hitting Save there rewrites these lines.',
+    '',
+    `OPENAI_API_KEY=${config.apiKey || ''}`,
+    `OPENAI_TTS_MODEL=${config.model || 'tts-1-hd'}`,
+    `OPENAI_TTS_VOICE=${config.voice || 'alloy'}`,
+    `OPENAI_REWRITE_MODEL=${config.rewriteModel || 'gpt-4o-mini'}`,
+    `OPENAI_NARRATE_REWRITE=${config.rewrite === false ? 'false' : 'true'}`,
+    `OPENAI_NARRATION_SECONDS=${config.narrationSeconds || 10}`,
+    '',
+  ];
+  fs.writeFileSync(ENV_PATH, lines.join('\n'), 'utf8');
+}
+
+function envBool(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).toLowerCase() === 'true';
+}
+
+// Narration length is a continuous dial, not fixed presets, so "a lot of
+// options" just falls out of the formula: any whole second from 3 to 30 is a
+// valid target. Word count assumes a natural ~150wpm speaking rate; maxTokens
+// carries headroom so the model can actually land near the target instead of
+// getting cut off mid-sentence.
+const NARRATION_MIN_SECONDS = 3;
+const NARRATION_MAX_SECONDS = 30;
+function clampNarrationSeconds(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n)) return 10;
+  return Math.min(NARRATION_MAX_SECONDS, Math.max(NARRATION_MIN_SECONDS, Math.round(n)));
+}
+function narrationPreset(seconds) {
+  const s = clampNarrationSeconds(seconds);
+  const words = Math.max(6, Math.round(s * 2.5));
+  // Generous on purpose: a few hundred extra output tokens on a model this
+  // cheap costs a rounding error, getting cut off mid-word does not. Technical
+  // vocabulary (dependencies, maintainability...) tokenizes far less
+  // efficiently than the ~1.3 tokens/word rule of thumb, 2.2x truncated real
+  // 30s output during testing, this wider margin is measured, not a guess.
+  const maxTokens = Math.round(words * 4) + 40;
+  return { seconds: s, words, maxTokens };
+}
+function clampSpeed(speed) {
+  const n = Number(speed);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(2, Math.max(0.5, n)); // OpenAI allows 0.25-4.0, keeping the UI to a sane-sounding range
+}
+
+const envFile = loadDotEnv();
+// Real environment variables win over .env, same convention as every other
+// dotenv-style tool, useful if key management ever moves to the OS/process
+// level instead of this local file.
+let ttsConfig = {
+  apiKey: process.env.OPENAI_API_KEY || envFile.OPENAI_API_KEY || '',
+  model: process.env.OPENAI_TTS_MODEL || envFile.OPENAI_TTS_MODEL || 'tts-1-hd',
+  voice: process.env.OPENAI_TTS_VOICE || envFile.OPENAI_TTS_VOICE || 'alloy',
+  rewriteModel: process.env.OPENAI_REWRITE_MODEL || envFile.OPENAI_REWRITE_MODEL || 'gpt-4o-mini',
+  rewrite: envBool(process.env.OPENAI_NARRATE_REWRITE || envFile.OPENAI_NARRATE_REWRITE, true),
+  narrationSeconds: clampNarrationSeconds(process.env.OPENAI_NARRATION_SECONDS || envFile.OPENAI_NARRATION_SECONDS || 10),
+};
+
+// --- usage / spend tracking, local only, persisted to usage.json (gitignored) ---
+const USAGE_PATH = path.join(__dirname, 'usage.json');
+// Best-effort $ estimates. TTS is billed by character for tts-1/tts-1-hd,
+// confirmed against OpenAI's own pricing. gpt-4o-mini-tts prices differently
+// (token-based audio output) and is approximated here at the tts-1 rate,
+// labelled as an estimate in the UI rather than presented as exact.
+const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000015 };
+const REWRITE_PRICE_PER_TOKEN = { prompt: 0.00000015, completion: 0.0000006 }; // gpt-4o-mini, $0.15 / $0.60 per 1M
+
+function loadUsage() {
+  try {
+    return JSON.parse(fs.readFileSync(USAGE_PATH, 'utf8'));
+  } catch {
+    return { totalCost: 0, ttsCalls: 0, ttsChars: 0, rewriteCalls: 0, rewriteTokens: 0, since: new Date().toISOString() };
   }
 }
-loadDotEnv();
+let usage = loadUsage();
+function saveUsage() {
+  try {
+    fs.writeFileSync(USAGE_PATH, JSON.stringify(usage, null, 2), 'utf8');
+  } catch {
+    // non-fatal, worst case usage just isn't persisted across a restart
+  }
+}
+function recordUsage({ ttsChars, ttsModel, rewritePromptTokens, rewriteCompletionTokens }) {
+  const ttsPrice = PRICE_PER_CHAR[ttsModel] || PRICE_PER_CHAR['tts-1-hd'];
+  let cost = (ttsChars || 0) * ttsPrice;
+  usage.ttsCalls += 1;
+  usage.ttsChars += ttsChars || 0;
+  if (rewritePromptTokens || rewriteCompletionTokens) {
+    cost += (rewritePromptTokens || 0) * REWRITE_PRICE_PER_TOKEN.prompt + (rewriteCompletionTokens || 0) * REWRITE_PRICE_PER_TOKEN.completion;
+    usage.rewriteCalls += 1;
+    usage.rewriteTokens += (rewritePromptTokens || 0) + (rewriteCompletionTokens || 0);
+  }
+  usage.totalCost += cost;
+  saveUsage();
+}
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4317;
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000; // a session file counts as "active" if touched in the last 15 min
-const POLL_MS = 700;
+const POLL_MS = 250; // how often we check transcripts for new lines, kept tight on purpose, see README
 const BACKLOG_SIZE = 300;
+const MAX_SPEECH_CHARS = 900; // hard backstop, comfortably above even the 20s preset's typical output
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || 'tts-1-hd';
-const OPENAI_TTS_VOICE = process.env.OPENAI_TTS_VOICE || 'alloy';
-const MAX_SPEECH_CHARS = 600; // matches the client's own truncation, this is just a hard backstop
-
-// Mirrors Claude Code's own project-folder naming: "C:\Users\User\Documents\Claude"
-// becomes "C--Users-User-Documents-Claude". Verified against real files on this machine.
 function encodeProjectDir(cwd) {
+  // Mirrors Claude Code's own project-folder naming: "C:\Users\User\Documents\Claude"
+  // becomes "C--Users-User-Documents-Claude". Verified against real files on this machine.
   return cwd.replace(/^([A-Za-z]):\\/, '$1--').replace(/\\/g, '-');
 }
 
@@ -128,20 +234,61 @@ setInterval(() => {
 }, POLL_MS);
 scanForActiveSessions();
 
-// --- optional cloud text-to-speech (OpenAI) --------------------------------
+// --- optional cloud voice: rewrite + text-to-speech (OpenAI) ---------------
 
-async function synthesizeSpeech(text) {
-  const resp = await fetch('https://api.openai.com/v1/audio/speech', {
+async function rewriteForSpeech(text, kind) {
+  const context =
+    kind === 'thinking'
+      ? 'This is raw internal reasoning, often fragmented or rambling as it is being worked out.'
+      : 'This is already meant to be read by a person, just make it work as spoken audio.';
+  const preset = narrationPreset(ttsConfig.narrationSeconds);
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${ttsConfig.apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: OPENAI_TTS_MODEL,
-      voice: OPENAI_TTS_VOICE,
+      model: ttsConfig.rewriteModel,
+      messages: [
+        {
+          role: 'system',
+          content:
+            "You narrate a coding agent's live activity out loud, in real time, for someone half-listening while they work on something else. " +
+            `HARD LIMIT: ${preset.words} words maximum, count them as you write and stop at the limit even mid-thought. ` +
+            'Present tense, plain language, natural spoken sentences. ' +
+            'No code, no file paths, no markdown, no meta-commentary about what you are doing right now, just the plain-language gist of it. ' +
+            'Reply with only the rewritten line and nothing else.',
+        },
+        { role: 'user', content: `${context}\n\nRewrite this in ${preset.words} words or fewer:\n\n${text}` },
+      ],
+      max_tokens: preset.maxTokens,
+      temperature: 0.2,
+    }),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    throw new Error(`OpenAI rewrite ${resp.status}: ${errText.slice(0, 200)}`);
+  }
+  const data = await resp.json();
+  const out = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  const u = data && data.usage;
+  return { text: (out || '').trim(), promptTokens: (u && u.prompt_tokens) || 0, completionTokens: (u && u.completion_tokens) || 0 };
+}
+
+async function synthesizeSpeech(text, speed) {
+  const resp = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${ttsConfig.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: ttsConfig.model,
+      voice: ttsConfig.voice,
       input: text,
       response_format: 'mp3',
+      speed: clampSpeed(speed),
     }),
   });
   if (!resp.ok) {
@@ -172,6 +319,19 @@ function readJsonBody(req) {
   });
 }
 
+function publicConfig() {
+  return {
+    cloudVoice: Boolean(ttsConfig.apiKey),
+    model: ttsConfig.model,
+    voice: ttsConfig.voice,
+    rewrite: ttsConfig.rewrite,
+    rewriteModel: ttsConfig.rewriteModel,
+    narrationSeconds: ttsConfig.narrationSeconds,
+    narrationMin: NARRATION_MIN_SECONDS,
+    narrationMax: NARRATION_MAX_SECONDS,
+  };
+}
+
 // --- http server ------------------------------------------------------
 
 const viewerDir = path.join(__dirname, 'viewer');
@@ -191,29 +351,103 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Never echoes ttsConfig.apiKey back, only whether one is set. The browser
+  // never needs the real value, and never gets it after Settings saves one.
   if (req.url === '/config' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ cloudVoice: Boolean(OPENAI_API_KEY), model: OPENAI_API_KEY ? OPENAI_TTS_MODEL : null }));
+    res.end(JSON.stringify(publicConfig()));
+    return;
+  }
+
+  if (req.url === '/usage' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(usage));
+    return;
+  }
+
+  if (req.url === '/usage/reset' && req.method === 'POST') {
+    usage = { totalCost: 0, ttsCalls: 0, ttsChars: 0, rewriteCalls: 0, rewriteTokens: 0, since: new Date().toISOString() };
+    saveUsage();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(usage));
+    return;
+  }
+
+  if (req.url === '/settings' && req.method === 'POST') {
+    readJsonBody(req)
+      .then((body) => {
+        const typedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+        const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : ttsConfig.model;
+        const voice = typeof body.voice === 'string' && body.voice.trim() ? body.voice.trim() : ttsConfig.voice;
+        const rewriteModel =
+          typeof body.rewriteModel === 'string' && body.rewriteModel.trim() ? body.rewriteModel.trim() : ttsConfig.rewriteModel;
+        const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : ttsConfig.rewrite;
+        const narrationSeconds =
+          body.narrationSeconds !== undefined ? clampNarrationSeconds(body.narrationSeconds) : ttsConfig.narrationSeconds;
+        const clearKey = body.clearKey === true;
+        // A blank key field means "leave whatever's already saved alone", not
+        // "erase it", the only way to actually clear it is the explicit flag.
+        const apiKey = clearKey ? '' : typedKey || ttsConfig.apiKey;
+
+        ttsConfig = { apiKey, model, voice, rewriteModel, rewrite, narrationSeconds };
+        writeDotEnv(ttsConfig);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(Object.assign({ ok: true }, publicConfig())));
+      })
+      .catch(() => {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'bad request' }));
+      });
     return;
   }
 
   if (req.url === '/speak' && req.method === 'POST') {
     readJsonBody(req)
       .then(async (body) => {
-        const text = (body && body.text ? String(body.text) : '').slice(0, MAX_SPEECH_CHARS);
-        if (!text) {
+        const rawText = (body && body.text ? String(body.text) : '').slice(0, MAX_SPEECH_CHARS);
+        const kind = typeof body.kind === 'string' ? body.kind : 'text';
+        if (!rawText) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'no text' }));
           return;
         }
-        if (!OPENAI_API_KEY) {
+        if (!ttsConfig.apiKey) {
           res.writeHead(501, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'no OPENAI_API_KEY configured, use the free browser voice instead' }));
+          res.end(JSON.stringify({ error: 'no OpenAI key configured, use the free browser voice instead' }));
           return;
         }
+
+        let spokenText = rawText;
+        let rewriteUsage = null;
+        const shouldRewrite = ttsConfig.rewrite && (kind === 'thinking' || kind === 'text');
+        if (shouldRewrite) {
+          try {
+            const result = await rewriteForSpeech(rawText, kind);
+            if (result.text) spokenText = result.text;
+            rewriteUsage = result;
+          } catch (err) {
+            // rewrite hiccuped, speak the raw text rather than drop the line
+          }
+        }
+
         try {
-          const audio = await synthesizeSpeech(text);
-          res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': audio.length });
+          const audio = await synthesizeSpeech(spokenText, body.speed);
+          recordUsage({
+            ttsChars: spokenText.length,
+            ttsModel: ttsConfig.model,
+            rewritePromptTokens: rewriteUsage ? rewriteUsage.promptTokens : 0,
+            rewriteCompletionTokens: rewriteUsage ? rewriteUsage.completionTokens : 0,
+          });
+          res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': audio.length,
+            // Diagnostic only, this header is not what gets synthesized, the
+            // full spokenText already went into synthesizeSpeech() above.
+            // Sliced only to stay a well-behaved HTTP header, not to truncate
+            // the audio, MAX_SPEECH_CHARS (900) is the real ceiling.
+            'X-Spoken-Text': encodeURIComponent(spokenText.slice(0, 900)),
+          });
           res.end(audio);
         } catch (err) {
           res.writeHead(502, { 'Content-Type': 'application/json' });
@@ -250,6 +484,12 @@ const server = http.createServer((req, res) => {
 // output, it has no business being reachable from anything else on the LAN.
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`claude-narrator watching: ${watchDir}`);
-  console.log(`voice: ${OPENAI_API_KEY ? `OpenAI (${OPENAI_TTS_MODEL})` : 'free browser voice (no OPENAI_API_KEY set)'}`);
+  console.log(
+    `voice: ${
+      ttsConfig.apiKey
+        ? `OpenAI (${ttsConfig.model}, ${ttsConfig.voice}), rewrite ${ttsConfig.rewrite ? `on (~${ttsConfig.narrationSeconds}s)` : 'off'}`
+        : 'free browser voice (no key configured)'
+    }`
+  );
   console.log(`open http://localhost:${PORT}`);
 });

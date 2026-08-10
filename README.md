@@ -24,17 +24,24 @@ Thinking is spoken opportunistically, not queued: if you're mid-thought faster t
 
 ### Better voice (optional, costs money)
 
-The free browser voice is Windows' built-in SAPI voices, which sound robotic. Two upgrades, cheapest first:
+The free browser voice is Windows' built-in SAPI voices, which sound robotic. Three upgrades, cheapest first:
 
 1. **Open it in Edge instead of Chrome.** Edge exposes Windows' free neural "Natural" voices through the same API, Chrome doesn't. If Windows hasn't downloaded any yet: Settings → Time & Language → Speech → Manage voices → Add voices. Zero cost either way.
-2. **OpenAI text-to-speech**, wired in server-side:
-   - Copy `.env.example` to `.env`, set `OPENAI_API_KEY=sk-...`, restart the server.
-   - Defaults to `tts-1-hd` at $30 / 1M characters, override with `OPENAI_TTS_MODEL=tts-1` in `.env` for the cheaper $15 / 1M tier if HD quality isn't worth 2x. Voice defaults to `alloy`, override with `OPENAI_TTS_VOICE`.
-   - The math: narrated lines are capped around 200 to 280 characters, so each spoken line costs roughly $0.005 to $0.008 on `tts-1-hd` (half that on `tts-1`). A heavy multi-hour session with a few hundred spoken lines lands under $2.
+2. **OpenAI text-to-speech**, wired in server-side. Two ways to turn it on, same result either way:
+   - **From the app:** click the gear icon, paste your key, pick a model and voice, hit Save. No restart, it's live immediately.
+   - **By hand:** copy `.env.example` to `.env`, set `OPENAI_API_KEY=sk-...`, restart the server. The Settings panel just writes this same file, so either path works and neither conflicts with the other.
+   - Defaults to `tts-1-hd` at $30 / 1M characters, switch to `tts-1` in Settings (or `OPENAI_TTS_MODEL` in `.env`) for the cheaper $15 / 1M tier if HD quality isn't worth 2x. Voice defaults to `alloy`, five others available in the same dropdown.
    - If the API call fails for any reason (no credits, bad key, rate limit, network blip), that one line silently falls back to the free local voice instead of going dead. You'll never get silence, worst case you get the robotic voice back for a line or two.
    - The voice-mode badge next to the enable button shows which one is actually active right now.
+3. **Rewrite before speaking**, on by default once cloud voice is configured, toggle it off in Settings if you'd rather hear the raw text verbatim. `thinking` and `text` events get a quick pass through `gpt-4o-mini` first, turning raw, often-rambling internal-monologue prose into one short, natural spoken sentence, present tense, plain language, no code or file paths recited out loud. Example, straight from a real run:
+   > raw: *"So I'm thinking about whether to use approach A or approach B here, and honestly A seems cleaner since it avoids the extra dependency, but let me actually double check that assumption before committing to it because I don't want to paint myself into a corner three files from now."*
+   > spoken: *"I'm deciding between approach A and B, and A looks cleaner, but I need to double-check before I commit."*
 
-Your `.env` file is already gitignored, the real key never gets committed regardless of how careful you are about it otherwise.
+   This adds a second, much cheaper API call per line (a short chat completion ahead of the TTS call), and in practice it keeps narration feeling caught-up rather than falling behind, since short rewritten lines take a few seconds to speak instead of twenty. If the rewrite call fails, that line speaks the raw text instead of getting dropped.
+
+The math on all of it: narrated lines are capped at 350 to 500 characters before rewriting condenses them further, so per-line cost stays a fraction of a cent even with both calls (rewrite + TTS) stacked, and a heavy multi-hour session with a few hundred spoken lines lands well under $2.
+
+Your `.env` file is already gitignored, the real key never gets committed regardless of how careful you are about it otherwise, and the app itself never echoes the key back to the browser after saving it, only whether one is set.
 
 ### About the sprites
 
