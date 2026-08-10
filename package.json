@@ -1,6 +1,6 @@
 {
   "name": "pico",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "A quick pico of what your Claude Code agent is thinking, live, as it works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
   "main": "desktop/main.js",
   "bin": {
@@ -11,6 +11,8 @@
     "electron": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:win-dir": "electron-builder --win dir --publish never",
+    "dist:win-packager": "electron-packager . Pico --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false",
+    "postdist:win-packager": "node desktop/trim-locales.js",
     "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1"
   },
   "license": "MIT",

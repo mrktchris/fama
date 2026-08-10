@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * claude-narrator desktop shell (Electron).
+ * Pico desktop shell (Electron).
  *
  * This does NOT reimplement the server, it spawns the existing server.js as a
  * child process (same code path as `npm start`, already tested) and points a
@@ -14,10 +14,11 @@
  * zero prerequisites is a real fast-follow, not done here.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu } = require('electron');
-const { spawn } = require('child_process');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, Notification } = require('electron');
+const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { autoUpdater } = require('electron-updater');
 
 // Found by audit: with no single-instance lock, double-clicking the exe again
@@ -89,11 +90,14 @@ function setupAutoUpdate(manualCheck) {
 const PORT = 4317;
 const ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+const DEFAULT_PREFS = { notificationsEnabled: true, launchOnStartup: false };
 
 let serverProcess = null;
 let mainWindow = null;
 let onboardingWindow = null;
 let tray = null;
+let notifyReq = null; // live connection to our own /events SSE feed, for native notifications
+let shortcutOfferedThisRun = false;
 
 function loadConfig() {
   try {
@@ -105,6 +109,34 @@ function loadConfig() {
 function saveConfig(cfg) {
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+}
+
+// App-level prefs (notifications, launch-on-startup) live in the same
+// config.json as the watched project, just under their own keys, so there's
+// one file, not two, to keep in sync.
+function getPrefs() {
+  const cfg = loadConfig() || {};
+  return {
+    notificationsEnabled: typeof cfg.notificationsEnabled === 'boolean' ? cfg.notificationsEnabled : DEFAULT_PREFS.notificationsEnabled,
+    launchOnStartup: typeof cfg.launchOnStartup === 'boolean' ? cfg.launchOnStartup : DEFAULT_PREFS.launchOnStartup,
+  };
+}
+function setPrefs(partial) {
+  const cfg = loadConfig() || {};
+  const next = Object.assign(cfg, partial);
+  saveConfig(next);
+  if (typeof partial.launchOnStartup === 'boolean') applyLoginItemSetting(partial.launchOnStartup);
+  return getPrefs();
+}
+function applyLoginItemSetting(openAtLogin) {
+  // No-op in dev (unpackaged): setLoginItemSettings would point Windows at
+  // electron.exe with dev args, not something a user should get auto-started.
+  if (!app.isPackaged) return;
+  try {
+    app.setLoginItemSettings({ openAtLogin });
+  } catch (err) {
+    console.error('[prefs] failed to set login item', err);
+  }
 }
 
 // Mirrors server.js's own encoding, kept in sync deliberately rather than
@@ -213,6 +245,7 @@ function listAvailableProjects() {
 // to clean up later. stopServer() now actually waits for exit before a new
 // one starts.
 function stopServer() {
+  disconnectNotifyStream();
   if (!serverProcess) return Promise.resolve();
   const proc = serverProcess;
   serverProcess = null;
@@ -226,6 +259,7 @@ function stopServer() {
 async function startServer(watchDirEncoded) {
   await stopServer();
   const projectDir = path.join(claudeProjectsRoot(), watchDirEncoded);
+  const projectLabel = path.basename(realCwdFor(projectDir) || watchDirEncoded);
   serverProcess = spawn('node', [path.join(ROOT, 'server.js')], {
     // Real key ended up in a shipped release asset because the packaged app
     // wrote .env next to server.js, inside its own resources folder, by
@@ -236,9 +270,11 @@ async function startServer(watchDirEncoded) {
       PORT: String(PORT),
       CLAUDE_NARRATOR_DIR: projectDir,
       PICO_ENV_PATH: path.join(app.getPath('userData'), '.env'),
+      PICO_PROJECT_LABEL: projectLabel,
     }),
     windowsHide: true,
   });
+  connectNotifyStream();
   serverProcess.stdout.on('data', (d) => console.log(`[server] ${d}`.trim()));
   serverProcess.stderr.on('data', (d) => console.error(`[server] ${d}`.trim()));
   serverProcess.on('exit', (code) => console.log(`[server] exited with code ${code}`));
@@ -254,6 +290,102 @@ async function startServer(watchDirEncoded) {
   });
 }
 
+// --- desktop notifications ---------------------------------------------
+//
+// Small and infrequent on purpose ("think Apple", per the ask): fires on
+// real errors, and once when a session that was actively producing events
+// goes quiet, not on every single line. Reads the server's own /events SSE
+// feed rather than duplicating any transcript-tailing logic here, main.js
+// just watches the same stream the browser tab does.
+const sessionActivity = new Map(); // sessionId -> { count, timer }
+const IDLE_NOTIFY_MS = 20000;
+const IDLE_NOTIFY_MIN_EVENTS = 3;
+
+function notify(title, body) {
+  if (!getPrefs().notificationsEnabled) return;
+  if (!Notification.isSupported()) return;
+  // Skip if they're already looking at it, a bubble on top of the thing
+  // you're already watching is just noise.
+  if (mainWindow && mainWindow.isVisible() && mainWindow.isFocused()) return;
+  const n = new Notification({ title, body, silent: false });
+  n.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      openMainWindow();
+    }
+  });
+  n.show();
+}
+
+function handleNotifyEvent(evt) {
+  if (evt.kind === 'system') return;
+  if (evt.kind === 'error') {
+    notify('Pico', evt.detail || evt.label || 'Something went wrong in a session.');
+    return;
+  }
+  const sid = evt.sessionId;
+  if (!sid) return;
+  let entry = sessionActivity.get(sid);
+  if (!entry) {
+    entry = { count: 0, timer: null };
+    sessionActivity.set(sid, entry);
+  }
+  entry.count += 1;
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = setTimeout(() => {
+    if (entry.count >= IDLE_NOTIFY_MIN_EVENTS) {
+      notify('Pico', 'Claude looks done for now, quiet for a bit after some activity.');
+    }
+    sessionActivity.delete(sid);
+  }, IDLE_NOTIFY_MS);
+}
+
+// Plain http.get against our own loopback server, not a browser EventSource,
+// this runs in the main process which has no DOM. Retries a few times while
+// the child process is still binding, same pattern as openMainWindow's
+// tryLoad, then gives up quietly, notifications are a nice-to-have, not
+// load-bearing.
+function connectNotifyStream(attemptsLeft) {
+  if (attemptsLeft === undefined) attemptsLeft = 15;
+  disconnectNotifyStream();
+  const req = http.get(`http://127.0.0.1:${PORT}/events`, (res) => {
+    let buf = '';
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => {
+      buf += chunk;
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const raw = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        if (!raw.startsWith('data: ')) continue;
+        try {
+          handleNotifyEvent(JSON.parse(raw.slice(6)));
+        } catch {
+          // partial/malformed frame, ignore
+        }
+      }
+    });
+  });
+  req.on('error', () => {
+    if (attemptsLeft > 0 && serverProcess) setTimeout(() => connectNotifyStream(attemptsLeft - 1), 300);
+  });
+  notifyReq = req;
+}
+function disconnectNotifyStream() {
+  if (notifyReq) {
+    try {
+      notifyReq.destroy();
+    } catch {
+      // already dead, fine
+    }
+    notifyReq = null;
+  }
+  sessionActivity.forEach((entry) => entry.timer && clearTimeout(entry.timer));
+  sessionActivity.clear();
+}
+
 let isQuitting = false;
 
 function openMainWindow() {
@@ -265,7 +397,12 @@ function openMainWindow() {
     backgroundColor: '#0a0a0c',
     title: 'Pico',
     icon: path.join(__dirname, 'icon.png'),
-    webPreferences: { contextIsolation: true, spellcheck: true, autoplayPolicy: 'no-user-gesture-required' },
+    webPreferences: {
+      contextIsolation: true,
+      spellcheck: true,
+      autoplayPolicy: 'no-user-gesture-required',
+      preload: path.join(__dirname, 'preload-main.js'),
+    },
   });
   mainWindow.setMenuBarVisibility(false);
   // Closing the window hides it, doesn't quit, that's the whole point of the
@@ -308,14 +445,68 @@ ipcMain.handle('pick-folder', async () => {
   return { encoded: encodeProjectDir(result.filePaths[0]), path: result.filePaths[0], lastActive: Date.now() };
 });
 ipcMain.handle('confirm-project', async (event, encoded) => {
-  saveConfig({ watchDirEncoded: encoded });
+  // Merge, don't replace: this used to overwrite the whole config file with
+  // just { watchDirEncoded }, silently dropping notificationsEnabled and
+  // launchOnStartup back to defaults every time a project was switched.
+  saveConfig(Object.assign({}, loadConfig(), { watchDirEncoded: encoded }));
   if (onboardingWindow) {
     onboardingWindow.close();
     onboardingWindow = null;
   }
   await startServer(encoded);
   openMainWindow();
+  offerDesktopShortcut();
 });
+
+ipcMain.handle('get-app-prefs', () => getPrefs());
+ipcMain.handle('set-app-prefs', (event, partial) => setPrefs(partial || {}));
+
+// --- desktop shortcut ----------------------------------------------------
+//
+// electron-packager (used here because electron-builder's NSIS step can't
+// run in this build environment, see README) produces a plain folder, no
+// installer, so nothing puts an icon on the Desktop the way a real installer
+// would. This does it directly via PowerShell's WScript.Shell COM object,
+// the same mechanism Windows shortcuts (.lnk) are made with, no extra tools.
+function desktopShortcutPath() {
+  const desktop = path.join(app.getPath('home'), 'Desktop');
+  return path.join(desktop, 'Pico.lnk');
+}
+function createDesktopShortcut() {
+  if (!app.isPackaged) return Promise.resolve(false); // dev mode: nothing sane to point a shortcut at
+  const target = process.execPath; // Pico.exe itself, icon is already embedded at package time
+  const linkPath = desktopShortcutPath();
+  const psCommand =
+    `$s = New-Object -ComObject WScript.Shell; ` +
+    `$lnk = $s.CreateShortcut('${linkPath.replace(/'/g, "''")}'); ` +
+    `$lnk.TargetPath = '${target.replace(/'/g, "''")}'; ` +
+    `$lnk.WorkingDirectory = '${path.dirname(target).replace(/'/g, "''")}'; ` +
+    `$lnk.Save()`;
+  return new Promise((resolve) => {
+    exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, (err) => {
+      if (err) console.error('[shortcut] failed', err);
+      resolve(!err);
+    });
+  });
+}
+// Offered once per run, only the first time this machine ever finishes
+// onboarding (tracked in config.json), and only if nothing's already there,
+// re-clicking "Change watched project" on every later run shouldn't nag.
+function offerDesktopShortcut() {
+  if (shortcutOfferedThisRun) return;
+  shortcutOfferedThisRun = true;
+  if (!app.isPackaged) return;
+  const cfg = loadConfig() || {};
+  if (cfg.desktopShortcutOffered) return;
+  if (fs.existsSync(desktopShortcutPath())) {
+    saveConfig(Object.assign({}, cfg, { desktopShortcutOffered: true }));
+    return;
+  }
+  createDesktopShortcut().then((ok) => {
+    saveConfig(Object.assign({}, loadConfig(), { desktopShortcutOffered: true }));
+    if (ok) notify('Pico', 'Added a Pico shortcut to your Desktop.');
+  });
+}
 
 function createTray() {
   try {
@@ -328,6 +519,7 @@ function createTray() {
     Menu.buildFromTemplate([
       { label: 'Show', click: () => (mainWindow ? mainWindow.show() : openMainWindow()) },
       { label: 'Change watched project…', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
+      { label: 'Create desktop shortcut', click: () => createDesktopShortcut() },
       { label: 'Check for updates…', click: () => setupAutoUpdate(true) },
       { type: 'separator' },
       { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
@@ -346,10 +538,12 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   createTray();
+  applyLoginItemSetting(getPrefs().launchOnStartup);
   const config = loadConfig();
   if (config && config.watchDirEncoded) {
     await startServer(config.watchDirEncoded);
     openMainWindow();
+    offerDesktopShortcut();
   } else {
     openOnboardingWindow();
   }

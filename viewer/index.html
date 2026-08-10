@@ -104,6 +104,7 @@
           <button type="button" class="preset-chip" data-target="voice-style" data-value="Calm, professional, understated">Calm &amp; professional</button>
           <button type="button" class="preset-chip" data-target="voice-style" data-value="Warm, upbeat, energetic delivery">Warm &amp; upbeat</button>
           <button type="button" class="preset-chip" data-target="voice-style" data-value="Dry British accent, deadpan delivery">Dry British</button>
+          <button type="button" class="preset-chip" data-target="voice-style" data-value="Crisp, calm, unhurried AI-assistant tone, faint dry wit, unflappable">Jarvis-style AI</button>
           <button type="button" class="preset-chip" data-target="voice-style" data-value="">clear</button>
         </div>
 
@@ -115,6 +116,7 @@
           <button type="button" class="preset-chip" data-target="persona" data-value="A sharp CMO giving a fast, confident executive summary, no hedging, results-focused">CMO / executive</button>
           <button type="button" class="preset-chip" data-target="persona" data-value="Catching a friend up casually, relaxed and conversational">Casual</button>
           <button type="button" class="preset-chip" data-target="persona" data-value="A terse ops status update, just the facts, minimal words">Terse / ops</button>
+          <button type="button" class="preset-chip" data-target="persona" data-value="A hyper-competent, unflappable AI assistant, dry wit, states the plan and moves, never wastes a word">Jarvis-style AI</button>
           <button type="button" class="preset-chip" data-target="persona" data-value="">clear</button>
         </div>
 
@@ -148,6 +150,12 @@
           <span>Browser voice <span class="settings-hint">free, used if cloud isn't configured or a call fails</span></span>
           <select id="voice-select"></select>
         </label>
+      </section>
+
+      <section class="settings-section hidden" id="desktop-app-section">
+        <h3>Desktop app <span class="settings-hint">only applies when running as the installed app, not in a browser tab</span></h3>
+        <label class="settings-field-inline"><input type="checkbox" id="settings-notifications" class="toggle-switch" checked><span>Desktop notifications <span class="settings-hint">small native bubbles for errors and "looks done for now"</span></span></label>
+        <label class="settings-field-inline"><input type="checkbox" id="settings-launch-startup" class="toggle-switch"><span>Launch Pico when Windows starts</span></label>
       </section>
 
       <section class="settings-section">

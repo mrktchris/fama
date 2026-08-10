@@ -449,6 +449,7 @@ main#lanes {
   padding: 20px;
 }
 .settings-overlay.hidden { display: none; }
+.settings-section.hidden { display: none; }
 
 .settings-modal {
   width: 100%;

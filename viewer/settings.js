@@ -26,6 +26,26 @@
   const removeBtn = document.getElementById('settings-remove-key');
   const saveStatusEl = document.getElementById('settings-save-status');
 
+  // Electron-only controls (native notifications, launch at startup): meaningless
+  // when this same page is opened plain in a browser tab (`npm start`), so the
+  // whole section stays hidden unless preload-main.js actually exposed the bridge.
+  const desktopAppSection = document.getElementById('desktop-app-section');
+  const notificationsCheckbox = document.getElementById('settings-notifications');
+  const launchStartupCheckbox = document.getElementById('settings-launch-startup');
+  if (window.picoDesktop) {
+    desktopAppSection.classList.remove('hidden');
+    window.picoDesktop.getPrefs().then((prefs) => {
+      notificationsCheckbox.checked = prefs.notificationsEnabled;
+      launchStartupCheckbox.checked = prefs.launchOnStartup;
+    });
+    notificationsCheckbox.addEventListener('change', () => {
+      window.picoDesktop.setPrefs({ notificationsEnabled: notificationsCheckbox.checked });
+    });
+    launchStartupCheckbox.addEventListener('change', () => {
+      window.picoDesktop.setPrefs({ launchOnStartup: launchStartupCheckbox.checked });
+    });
+  }
+
   // Mirrors the server's own PRICE_PER_CHAR table (server.js) exactly, on
   // purpose: these two fell out of sync when gpt-4o-mini-tts was added here
   // without a matching entry, so the estimate shown before you save quietly

@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * claude-narrator
+ * Pico
  * Local live viewer for Claude Code activity. Tails the JSONL session
  * transcripts Claude Code already writes under ~/.claude/projects/<encoded-cwd>/
  * and streams normalized events to a browser over Server-Sent Events.
@@ -83,7 +83,7 @@ function loadDotEnv() {
 
 function writeDotEnv(config) {
   const lines = [
-    '# Written by the claude-narrator Settings panel (the gear icon in the app).',
+    '# Written by the Pico Settings panel (the gear icon in the app).',
     '# Hand edits are fine, but hitting Save there rewrites these lines.',
     '',
     `OPENAI_API_KEY=${config.apiKey || ''}`,
@@ -215,6 +215,12 @@ function resolveWatchDir() {
 }
 
 const watchDir = resolveWatchDir();
+// Friendly label only, never the absolute path: the desktop shell passes the
+// real project folder's basename in PICO_PROJECT_LABEL (see desktop/main.js),
+// CLI mode falls back to the actual cwd basename since that IS the project
+// dir there. Either way nothing that reveals a full filesystem path (which
+// leaks the OS username on Windows) ever reaches a client.
+const displayProjectName = process.env.PICO_PROJECT_LABEL || path.basename(process.cwd());
 
 const backlog = [];
 const sseClients = new Set();
@@ -416,10 +422,11 @@ const server = http.createServer((req, res) => {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     });
-    // Full filesystem path used to go straight into the visible status text,
-    // which showed up in screenshots/demos/streams for no good reason. Now
-    // it's a hover tooltip only, the visible text is just "Live".
-    res.write(`data: ${JSON.stringify({ kind: 'system', label: 'connected', detail: 'Live', path: watchDir })}\n\n`);
+    // Used to send the full absolute filesystem path here (fine as a tooltip,
+    // still a real leak: it showed up in screenshots/demos/streams, and on
+    // Windows an absolute path always contains the OS username). Sends only a
+    // friendly project name now, never a path, see displayProjectName above.
+    res.write(`data: ${JSON.stringify({ kind: 'system', label: 'connected', detail: 'Live', projectName: displayProjectName })}\n\n`);
     for (const event of backlog) res.write(`data: ${JSON.stringify(event)}\n\n`);
     sseClients.add(res);
     req.on('close', () => sseClients.delete(res));
@@ -602,7 +609,7 @@ server.on('error', (err) => {
 // Bind to loopback only. This feed includes file paths, thinking, and tool
 // output, it has no business being reachable from anything else on the LAN.
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`claude-narrator watching: ${watchDir}`);
+  console.log(`Pico watching: ${watchDir}`);
   console.log(
     `voice: ${
       ttsConfig.apiKey

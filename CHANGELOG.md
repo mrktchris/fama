@@ -2,6 +2,46 @@
 
 All notable changes to this project, newest first. Versions match `package.json` and the git tags each commit was made under.
 
+## 0.10.0
+
+- **Desktop notifications.** Small native bubbles (Settings toggle, on by default) for real errors and for "Claude looks done for now" after a burst of activity goes quiet. Skipped automatically if the window's already visible and focused, no bubble on top of the thing you're already looking at. Reads the same `/events` feed the browser tab does, no duplicated tailing logic.
+- **Launch Pico when Windows starts**, a second Settings toggle next to notifications, off by default. Both are Electron-only and the whole "Desktop app" Settings section stays hidden when this same viewer is opened plain in a browser tab, where neither concept applies.
+- **Desktop shortcut**, created automatically once on first successful launch of a packaged build (also available anytime from the tray menu). electron-packager doesn't produce an installer, so nothing else was going to put an icon on the Desktop.
+- **Jarvis-style preset**, both persona and voice-style, alongside the existing CMO/casual/terse and calm/upbeat/British presets, same mechanism, no new plumbing.
+- **Packaged build size cut ~15%** (272MB → 232MB on the win32-x64 build): Electron ships all 55 Chromium locale `.pak` files by default, Pico's UI is English-only, so a `postdist:win-packager` step now keeps just `en-US.pak`. Verified against a real build, including relaunching the trimmed exe to confirm it still starts.
+- **Fixed a config-loss bug**: switching watched projects called `saveConfig({ watchDirEncoded })`, replacing the whole config file and silently resetting the two new toggles above back to defaults every time. Now merges with the existing config instead.
+- **No more absolute filesystem path sent to the browser.** The `/events` system event used to include the full watch path (Windows always embeds the OS username in an absolute path); it now sends only a friendly project name.
+- Renamed the last of the pre-Pico internal naming (a startup log line, an `.env` header comment, a couple of `localStorage` keys) with a one-time migration so existing users don't lose persisted Settings toggles on update.
+- `package-lock.json` re-synced to the `pico` package name (was still `aloud` from before that rename).
+
+## 0.9.0
+
+- **`.env` write-path fix.** The packaged v0.7.0 build wrote its local `.env` config file next to `server.js`, inside the app's own installed resources folder, on every Settings save, since `ENV_PATH` had no override and always resolved there regardless of packaged vs. source-checkout context. That build has been removed from Releases. `.env` now always writes to the OS per-user app data folder (`app.getPath('userData')`), verified against a fresh packaged build. If you ran v0.7.0 and saved an OpenAI key through Settings, rotate it as a precaution.
+- **Renamed to Pico** (from Aloud), including a new bird mascot (wing/crest/beak, replacing the earlier robot-block design) with matching bob/blink/chirp/wing-flutter animations.
+- **Manual per-lane pin.** Click a lane's speaker icon to lock narration to that session regardless of which one is most recently active; a "stop talking" button cancels the current line without turning voice off entirely.
+- CSRF hardening: a per-process random token, injected into the served page and required as a custom header on every mutating request, defeats both cross-origin fetches and classic form-POST CSRF.
+- Fixed an XSS-shaped bug in lane rendering (session id was interpolated into HTML instead of set as text).
+- `Narrator.stop()` now genuinely cancels in-flight speech (an `AbortController` plus a generation counter) instead of just resetting visible UI state while an old request could still land and play.
+
+## 0.8.0
+
+- Batch of fixes from an external review, each verified against the real running app rather than just re-read code: `electron-updater` listeners were re-registering on every manual "check for updates" click, stacking duplicate dialogs; switching watched projects never stopped the previous server child, leaking a process and risking a port conflict; the onboarding project picker showed raw encoded folder names instead of real paths because it only checked the first line of a transcript file for a `cwd` field (the real record is usually a few lines in, after bookkeeping lines); no single-instance lock meant a second launch could spawn a second server against the same port.
+- `FileTailer` now uses the actual bytes read from `fs.readSync` instead of assuming it read to EOF, and decodes with `StringDecoder` instead of raw `toString('utf8')`, both fix real corruption at multi-byte UTF-8 boundaries under fast polling.
+- Settings "Hear a test line" now saves current form values before testing (it was testing whatever was last saved, not what was on screen), and the length/cost estimate shown before Save matches the server's real pricing table (`gpt-4o-mini-tts` had fallen out of sync between the two).
+
+## 0.7.0
+
+- Renamed to Aloud (from claude-narrator).
+- One-click updates via `electron-updater` against GitHub Releases.
+- First real packaged Windows build (later found to have the `.env` write-path bug fixed in 0.9.0, see above).
+
+## 0.6.0
+
+- **Standalone Windows desktop app** (Electron): system tray, hide-on-close instead of quit, a project onboarding picker for a double-clicked app with no "directory you launched it from," taskbar icon.
+- **Persona and voice-style controls** in Settings: free-text accent/tone for the cloud voice, and a separate persona field that shapes the rewrite step (works with any voice, free or cloud).
+- Playback failures now get reported back to the server (`/client-error`) instead of failing silently in the browser console.
+- Fixed a Settings race condition where an in-flight `/config` refresh could resolve after a fast edit and silently overwrite it before Save was clicked.
+
 ## 0.5.0
 
 - **Usage tracker.** New section at the top of Settings, running $ total for this OpenAI key on this machine (TTS characters + rewrite tokens, priced against OpenAI's published rates), with a reset button that only zeroes the local counter, it has no effect on real billing.

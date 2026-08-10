@@ -10,7 +10,8 @@
 // local voice for that one line instead of going silent.
 
 (function () {
-  const STORAGE_KEY = 'claude-narrator.voice';
+  const STORAGE_KEY = 'pico.voice';
+  const LEGACY_STORAGE_KEY = 'claude-narrator.voice'; // one-time migration, see _restoreVoice
   // Kept tight on purpose: a deep queue means a rate/settings change (or just
   // reality) takes that many stale utterances to catch up to, which reads as
   // "broken" even when every value is technically correct. Shallower queue,
@@ -72,7 +73,16 @@
     },
     _restoreVoice() {
       if (this.voice) return;
-      const saved = localStorage.getItem(STORAGE_KEY);
+      let saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        // Carry forward a pre-rename choice instead of silently dropping back
+        // to the default voice on this update.
+        saved = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (saved) {
+          localStorage.setItem(STORAGE_KEY, saved);
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
+        }
+      }
       if (!saved) return;
       const v = this.listVoices().find((v) => v.name === saved);
       if (v) this.voice = v;

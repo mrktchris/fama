@@ -160,11 +160,18 @@
 <section>
   <div class="wrap">
     <h2>Cleaned up, not read word for word</h2>
+    <p style="color:var(--muted); font-size:13.5px; margin-top:-16px; margin-bottom:24px;">The rewrite step works on any dense internal reasoning, not just code. Two examples:</p>
     <div class="quote-diff">
       <div class="tag">raw thinking</div>
-      <div class="raw">"So I'm thinking about whether to use approach A or approach B here, and honestly A seems cleaner since it avoids the extra dependency, but let me actually double check that assumption before committing to it because I don't want to paint myself into a corner three files from now."</div>
+      <div class="raw">"Okay so the naive fix here would be to just memoize this at the component level, but that's going to blow up the moment the parent re-renders with a new object reference, since the dependency array does referential equality, not deep equality, so I actually need to either hoist the computation up a level, wrap it in a stable callback, or just bite the bullet and normalize the state shape so this whole class of bug goes away instead of papering over one instance of it."</div>
       <div class="tag" style="margin-top:12px">spoken</div>
-      <div class="spoken">"I'm deciding between approach A and B, and A looks cleaner, but I need to double-check before I commit."</div>
+      <div class="spoken">"Memoizing here won't hold once the parent passes a new object reference. Better fix: normalize the state shape so this bug can't recur."</div>
+    </div>
+    <div class="quote-diff" style="margin-top:16px;">
+      <div class="tag">raw thinking</div>
+      <div class="raw">"Looking at this campaign, blended ROAS reads fine at 3.2x, but that's brand and non-brand mixed together, and split out, non-brand is actually closer to 1.4x, which means most of the reported lift is really just people who were already going to convert anyway typing the brand name into Google, so before recommending we scale budget here I need a real incrementality read instead of trusting the platform-reported number at face value."</div>
+      <div class="tag" style="margin-top:12px">spoken</div>
+      <div class="spoken">"Blended ROAS looks good, but that's brand and non-brand mixed together. Split out, non-brand is closer to 1.4x, I need a real incrementality read before recommending we scale this."</div>
     </div>
   </div>
 </section>
