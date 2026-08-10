@@ -446,7 +446,7 @@ main#lanes {
   overflow-y: auto;
   padding: 8px 6px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--feed-font-size, 12px);
   line-height: 1.55;
 }
 .lane-feed::-webkit-scrollbar { width: 7px; }
@@ -497,6 +497,29 @@ main#lanes {
   padding: 20px;
 }
 .hidden { display: none; }
+
+/* --- appearance customization, all client-side, no Save needed --- */
+
+body.mascot-hidden .mascot { display: none; }
+
+body.density-compact main#lanes { gap: 8px; padding: 12px 14px 28px; }
+body.density-compact .lane-header { padding: 6px 10px; }
+body.density-compact .row { padding: 1px 10px; }
+body.density-compact .lane-feed { padding: 4px 6px; line-height: 1.35; }
+
+/* Respects the OS-level setting automatically; the manual override below
+   (body.reduce-motion, from the Settings toggle) covers anyone who wants
+   this without changing their whole system preference. Previously this
+   project had zero reduced-motion handling at all, a real accessibility
+   gap, not just a nice-to-have. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
 
 .settings-modal {
   width: 100%;
@@ -632,6 +655,7 @@ main#lanes {
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 .preset-chip:hover { border-color: var(--accent); color: var(--text); }
+.preset-chip.active { border-color: var(--accent); background: var(--accent); color: #170f08; font-weight: 600; }
 
 .settings-field input[type="text"]:disabled { opacity: 0.4; cursor: not-allowed; }
 

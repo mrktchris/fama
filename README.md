@@ -21,7 +21,7 @@ Claude Code already streams everything it does into the chat pane. But that view
 
 > **Beta.** v0.12.0 is the first release meant for anyone other than the author. Earlier builds were alpha, have been removed, and are unsupported.
 
-**Desktop app (Windows):** grab the latest release, unzip, run `Fama.exe`. See [Releases](../../releases). Windows will show a SmartScreen warning on first launch (unsigned build, see below), click through it.
+**Desktop app (Windows):** see [Releases](../../releases) — either `Fama-Setup-*.exe` (a real installer, Start Menu shortcut + uninstaller) or `Fama-win32-x64.zip` (portable, unzip anywhere, run `Fama.exe`). Both unsigned for now, Windows will show a SmartScreen warning on first launch either way, click through it.
 
 **From source (Node 18+):**
 ```
@@ -63,7 +63,7 @@ Two real API calls happen per spoken line when the rewrite step is on (a short c
 
 ## Desktop app
 
-**Windows:** see Quick start above. This is an unpacked build, not yet a proper installer, a Windows-account permission wall (needs Developer Mode or admin, unavailable in the build environment) blocked the signed NSIS installer path. GitHub Actions is the documented next step to produce that properly, since GitHub's own runners don't hit the same restriction.
+**Windows:** see Quick start above for the portable zip. A real NSIS installer also exists now, unsigned: a Developer-Mode/symlink permission wall blocked building it on this project's own dev machine, GitHub Actions' Windows runners don't hit the same wall, confirmed with a real CI-built installer, not just a working command. Unsigned means the same SmartScreen warning either way for now, a code-signing certificate is a real purchase + identity verification only the repo owner can do, CI is ready to sign automatically the moment one exists (see `.github/workflows/ci.yml`).
 
 **Mac:** not pre-built, buildable yourself from source:
 ```
@@ -83,7 +83,7 @@ Needs Xcode Command Line Tools (`xcode-select --install`) and Node 18+. Unsigned
 - Requires Node.js installed and on PATH even in the packaged app, doesn't bundle its own runtime yet.
 - Windows only for a pre-built binary right now.
 - Subagent transcripts aren't shown yet, only top-level sessions.
-- **Update checks work, one-click install doesn't (yet).** The app correctly detects when a newer version is out and opens the Releases page for you, but it can't download-and-install itself in place: that mechanism assumes an NSIS installer, and this build ships as a plain unpacked folder (see the NSIS note below). Re-downloading and unzipping is the real update path until a signed installer exists.
+- **Update checks work, one-click install doesn't (yet).** The app correctly detects when a newer version is out and opens the Releases page for you, but the update-in-place mechanism assumes an NSIS install, and the Releases page currently ships the portable zip as the primary download. Re-downloading and unzipping (or re-running the installer) is the real update path until that's wired together.
 
 ## How this compares to similar tools
 
@@ -105,7 +105,8 @@ Those are audio-only, hook- or CLI-triggered. What's different here: a standalon
 - [ ] Detect when a session is specifically waiting on a permission decision, not just gone quiet, and say so in the notification differently
 - [ ] Bundle a Node runtime so the desktop app needs zero prerequisites
 - [ ] Upgrade Electron/electron-builder (current `npm audit` reports 13 vulnerabilities, all in build-tooling devDependencies confirmed not to ship in the actual package; still worth clearing, a major-version bump needs its own dedicated test pass, not a same-day fix)
-- [ ] Signed installer, once the NSIS/Developer-Mode wall (see Known limitations) is solved via CI
+- [ ] Actual code-signing certificate (or Microsoft Trusted Signing) — the CI pipeline is ready and waiting for one, this is a real purchase/identity-verification step for the repo owner, not an engineering task
+- [ ] Wire the installer into the actual auto-update flow (download + run silently) now that a real installer exists to target
 
 ## Contributing
 

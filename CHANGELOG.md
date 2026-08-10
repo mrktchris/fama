@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first. Versions match `package.json` and the git tags each commit was made under.
 
+## 0.12.3
+
+- **Real NSIS installer, confirmed working via CI, not just wired up.** The Developer-Mode/symlink permission wall that blocked `electron-builder`'s Windows installer build on this project's own dev machine doesn't exist on GitHub Actions' Windows runners — proved it, not assumed it: pushed a new CI job, downloaded the actual artifact it produced, confirmed a genuine 82MB valid NSIS installer (`file` reports it as a real "Nullsoft Installer self-extracting archive", not a corrupt or placeholder file). Uploaded as `Fama-Setup-0.12.3.exe`, a real install option (Start Menu shortcut, uninstaller) alongside the existing portable zip. Unsigned for now — the CI pipeline auto-detects and uses a code-signing certificate the moment one exists as a repo secret, but obtaining one is a real purchase + identity verification only the repo owner can do.
+- **Customization, across the app, not just the accent color from 0.12.2:** feed text size (small/medium/large), a compact layout mode, a mascot show/hide toggle, and a reduce-motion override — all in the new Settings → Appearance section, all instant, all persisted per device. Also added actual `prefers-reduced-motion` support for the first time, previously every animation in the app ignored that OS-level accessibility setting entirely.
+- Landing page and README updated to reflect the installer, the new customization options, and the now-resolved (not just documented) NSIS build limitation.
+
 ## 0.12.2
 
 - **Real bug, fixed, verified end to end:** cloud voice had been silently broken by a stale Windows *user*-level `OPENAI_API_KEY` environment variable (set during an even older, pre-Pico naming pass) shadowing a genuinely valid key correctly saved through Settings. `process.env` used to win over `.env` for every OpenAI-related config field, the usual dotenv convention; flipped so `.env` (what Settings actually writes) wins, a real environment variable only fills in when no `.env` value exists yet at all. Confirmed with the same key: hard 401 before this fix, a real synthesized audio file after it. The stale variable itself was also removed from this machine.

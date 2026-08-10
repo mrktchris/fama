@@ -31,6 +31,41 @@
     swatches[0] && swatches[0].classList.add('active');
   }
 
+  // Feed text size: same pattern, a CSS custom property on :root that
+  // .lane-feed reads (see style.css), so every open lane picks it up
+  // immediately, no reload.
+  const FEED_SIZE_KEY = 'fama.feed-size';
+  const sizeChips = document.querySelectorAll('#feed-size-row .preset-chip');
+  function applyFeedSize(size) {
+    document.documentElement.style.setProperty('--feed-font-size', size);
+    sizeChips.forEach((c) => c.classList.toggle('active', c.dataset.size === size));
+  }
+  sizeChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      applyFeedSize(chip.dataset.size);
+      localStorage.setItem(FEED_SIZE_KEY, chip.dataset.size);
+    });
+  });
+  applyFeedSize(localStorage.getItem(FEED_SIZE_KEY) || '12px');
+
+  // Compact layout, mascot visibility, reduce-motion override: all just a
+  // body class flip plus a localStorage flag, same instant/no-Save pattern.
+  function wireBodyClassToggle(checkboxId, className, storageKey, invert) {
+    const checkbox = document.getElementById(checkboxId);
+    if (!checkbox) return;
+    const stored = localStorage.getItem(storageKey);
+    const initial = stored === null ? checkbox.checked : stored === 'true';
+    checkbox.checked = initial;
+    document.body.classList.toggle(className, invert ? !initial : initial);
+    checkbox.addEventListener('change', () => {
+      document.body.classList.toggle(className, invert ? !checkbox.checked : checkbox.checked);
+      localStorage.setItem(storageKey, String(checkbox.checked));
+    });
+  }
+  wireBodyClassToggle('settings-density', 'density-compact', 'fama.density-compact', false);
+  wireBodyClassToggle('settings-mascot', 'mascot-hidden', 'fama.mascot-visible', true); // checkbox means "show", class means "hidden", inverted
+  wireBodyClassToggle('settings-reduce-motion', 'reduce-motion', 'fama.reduce-motion', false);
+
   const overlay = document.getElementById('settings-overlay');
   const toggleBtn = document.getElementById('settings-toggle');
   const closeBtn = document.getElementById('settings-close');
