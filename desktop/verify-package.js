@@ -28,6 +28,13 @@ const OUT_DIR = path.join(__dirname, '..', 'dist-desktop');
 
 // Filenames that must never appear anywhere in a built package.
 const FORBIDDEN_NAMES = new Set(['.env', '.env.local', '.env.production', 'usage.json', 'run.pid', 'electron.pid']);
+// Found live in a shipped release: electron.out.log / electron.err.log /
+// run.out.log / run.err.log from earlier dev testing were sitting in the
+// project root, matched no FORBIDDEN_NAMES entry (they're not fixed names),
+// and shipped in the zip anyway, exposing an absolute path (which carries
+// the OS username on Windows) and cloud-voice usage details. Checked by
+// extension now, not just exact name, so no future *.log file slips through.
+const FORBIDDEN_EXTENSIONS = new Set(['.log']);
 // Directories that must never be nested inside a build (a build inside a build).
 const FORBIDDEN_DIRS = new Set(['dist-desktop', '.git', 'node_modules/.cache']);
 // Content patterns that indicate a real secret regardless of filename.
@@ -64,12 +71,13 @@ function scanDir(dir, relRoot) {
     }
     if (!entry.isFile()) continue;
 
-    if (FORBIDDEN_NAMES.has(entry.name)) {
+    const ext = path.extname(entry.name).toLowerCase();
+
+    if (FORBIDDEN_NAMES.has(entry.name) || FORBIDDEN_EXTENSIONS.has(ext)) {
       problems.push(`FORBIDDEN FILE in package: ${rel}`);
       continue; // already fatal, no need to also scan its contents
     }
 
-    const ext = path.extname(entry.name).toLowerCase();
     if (!TEXT_EXT.has(ext)) continue;
     let stat;
     try {

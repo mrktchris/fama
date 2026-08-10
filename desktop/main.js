@@ -32,6 +32,13 @@ if (!gotLock) {
   app.quit();
 }
 
+// Found live: notification bubbles showed "electron.app.Fama" as their
+// source, not "Fama", because Windows shows Electron's default AppUserModelID
+// unless one is set explicitly. Matches package.json's build.appId.
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.chrissierra.fama');
+}
+
 // Update NOTIFICATION, not one-click auto-install, despite the name of the
 // library: checks the GitHub Releases feed for this repo (see the "publish"
 // block in package.json) on launch, silent if there's nothing new. Real bug
@@ -91,9 +98,36 @@ autoUpdater.on('update-not-available', () => {
 });
 
 function setupAutoUpdate(manualCheck) {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged) {
+    // Found live: clicking "Check for updates" in dev mode did nothing at
+    // all, no dialog, no console hint, reads as a broken button. It IS a
+    // no-op by design (electron-updater has nothing to check against outside
+    // a packaged build), but a manual click deserves to be told that instead
+    // of just... not responding.
+    if (manualCheck) {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Not available in dev mode',
+        message: "Update checks only work in a packaged build, there's nothing for electron-updater to check against here.",
+      });
+    }
+    return;
+  }
   lastCheckWasManual = !!manualCheck;
-  autoUpdater.checkForUpdates().catch((err) => console.error('[autoUpdater] check failed', err));
+  autoUpdater.checkForUpdates().catch((err) => {
+    // Found live: checkForUpdates() rejecting (as opposed to the autoUpdater
+    // emitting its own 'error' event, handled above) was only ever logged to
+    // console, invisible in a packaged app with no console window attached.
+    // A manual click that hits this path looked exactly like a dead button.
+    console.error('[autoUpdater] check failed', err);
+    if (lastCheckWasManual) {
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Could not check for updates',
+        message: `${err && err.message ? err.message : String(err)}\n\nYou can always check manually at the Releases page.`,
+      });
+    }
+  });
 }
 
 const PORT = 4317;
@@ -203,7 +237,10 @@ function applyLoginItemSetting(openAtLogin) {
 // Mirrors server.js's own encoding, kept in sync deliberately rather than
 // imported, this file has to survive being bundled independently of it.
 function encodeProjectDir(cwd) {
-  return cwd.replace(/^([A-Za-z]):\\/, '$1--').replace(/\\/g, '-');
+  // Mirrors server.js's own encodeProjectDir, kept in sync deliberately rather
+  // than imported, see that copy's comment for the Windows-vs-Unix scheme.
+  if (/^[A-Za-z]:\\/.test(cwd)) return cwd.replace(/^([A-Za-z]):\\/, '$1--').replace(/\\/g, '-');
+  return cwd.replace(/\//g, '-');
 }
 
 function claudeProjectsRoot() {
@@ -333,6 +370,7 @@ async function startServer(watchDirsEncoded) {
     env: Object.assign({}, process.env, {
       PORT: String(PORT),
       FAMA_ENV_PATH: path.join(app.getPath('userData'), '.env'),
+      FAMA_USAGE_PATH: path.join(app.getPath('userData'), 'usage.json'),
       CLAUDE_NARRATOR_DIRS: JSON.stringify(projectDirs),
       FAMA_PROJECT_LABELS: JSON.stringify(projectLabels),
     }),
@@ -362,8 +400,16 @@ async function startServer(watchDirsEncoded) {
 // feed rather than duplicating any transcript-tailing logic here, main.js
 // just watches the same stream the browser tab does.
 const sessionActivity = new Map(); // sessionId -> { count, timer }
-const IDLE_NOTIFY_MS = 20000;
-const IDLE_NOTIFY_MIN_EVENTS = 3;
+// Found live: 20s of quiet after only 3 events fires constantly during
+// completely normal use, Claude Code sessions have pauses well over 20s
+// between tool calls all the time. Raised to a threshold that means
+// something (a real burst, then genuinely done for a while), plus a global
+// cooldown below so several lanes going idle around the same time doesn't
+// still stack bubbles back to back.
+const IDLE_NOTIFY_MS = 90000;
+const IDLE_NOTIFY_MIN_EVENTS = 8;
+const IDLE_NOTIFY_COOLDOWN_MS = 120000;
+let lastIdleNotifyAt = 0;
 
 function notify(title, body) {
   if (!getPrefs().notificationsEnabled) return;
@@ -371,7 +417,16 @@ function notify(title, body) {
   // Skip if they're already looking at it, a bubble on top of the thing
   // you're already watching is just noise.
   if (mainWindow && mainWindow.isVisible() && mainWindow.isFocused()) return;
-  const n = new Notification({ title, body, silent: false });
+  // No icon meant Windows fell back to a generic/default one, the bubble
+  // didn't read as coming from this app at a glance. A hard cap on body
+  // length matters here too: this gets fed raw tool-error text sometimes,
+  // and an unbounded string turns a small clean bubble into a wall of text.
+  const n = new Notification({
+    title,
+    body: body && body.length > 180 ? body.slice(0, 177) + '…' : body,
+    icon: path.join(__dirname, 'icon.png'),
+    silent: false,
+  });
   n.on('click', () => {
     if (mainWindow) {
       mainWindow.show();
@@ -386,7 +441,7 @@ function notify(title, body) {
 function handleNotifyEvent(evt) {
   if (evt.kind === 'system') return;
   if (evt.kind === 'error') {
-    notify('Fama', evt.detail || evt.label || 'Something went wrong in a session.');
+    notify('Fama · Error', evt.detail || evt.label || 'Something went wrong in a session.');
     return;
   }
   const sid = evt.sessionId;
@@ -400,7 +455,7 @@ function handleNotifyEvent(evt) {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {
     if (entry.count >= IDLE_NOTIFY_MIN_EVENTS) {
-      notify('Fama', 'Claude looks done for now, quiet for a bit after some activity.');
+      notify('Fama · Idle', "Claude's gone quiet after some activity.");
     }
     sessionActivity.delete(sid);
   }, IDLE_NOTIFY_MS);
@@ -458,7 +513,7 @@ function openMainWindow() {
     height: 640,
     minWidth: 420,
     minHeight: 400,
-    backgroundColor: '#0a0a0c',
+    backgroundColor: '#1a1510',
     title: 'Fama',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
@@ -491,8 +546,9 @@ function openOnboardingWindow() {
     width: 460,
     height: 560,
     resizable: false,
-    backgroundColor: '#0a0a0c',
+    backgroundColor: '#1a1510',
     title: 'Fama setup',
+    icon: path.join(__dirname, 'icon.png'), // found live: this window had no icon set, fell back to Electron's default
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

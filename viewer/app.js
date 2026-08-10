@@ -376,7 +376,13 @@ function handleVoiceAndMascot(evt) {
     // rewrite step (when on) also keeps each line short, so this empties out
     // fast instead of falling behind.
     if (isFocused && speakThinkingEl.checked && narrator.pending === 0) {
-      narrator.say(truncateForSpeech(evt.detail, 350), 'thinking');
+      // evt.full (added alongside the always-220-char evt.detail display
+      // text) carries the real thinking block, up to lib/parse.js's 4000-char
+      // ceiling, so the server-side rewrite step actually has real reasoning
+      // to condense instead of an already-truncated fragment. Cap raised to
+      // match: the old 350 here was a second truncation on top of the parse
+      // layer's, re-creating the exact bug one layer up if left as-is.
+      narrator.say(truncateForSpeech(evt.full || evt.detail, 2000), 'thinking');
     }
   } else if (evt.kind === 'tool') {
     window.mascot.pulseTool(evt.label);

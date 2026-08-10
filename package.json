@@ -1,6 +1,6 @@
 {
   "name": "fama",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "The house that hears everything and speaks it back, live, as your Claude Code agent works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
   "main": "desktop/main.js",
   "bin": {
@@ -11,14 +11,16 @@
     "electron": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:win-dir": "electron-builder --win dir --publish never",
-    "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false --ignore=\"^/\\.env$\" --ignore=\"^/\\.env\\.local$\" --ignore=\"^/\\.env\\.production$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/docs\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\".*\\.pid$\" --ignore=\"^/tmp\"",
+    "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false --ignore=\"^/\\.env$\" --ignore=\"^/\\.env\\.local$\" --ignore=\"^/\\.env\\.production$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/docs\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
     "postdist:win-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js && node desktop/verify-package.js",
+    "dist:linux-packager": "electron-packager . fama --platform=linux --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.png --prune=true --asar=false --ignore=\"^/\\.env$\" --ignore=\"^/\\.env\\.local$\" --ignore=\"^/\\.env\\.production$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/docs\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
+    "postdist:linux-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js && node desktop/verify-package.js",
     "verify-package": "node desktop/verify-package.js",
     "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1"
   },
   "license": "MIT",
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "repository": {
     "type": "git",

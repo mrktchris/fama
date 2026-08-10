@@ -56,7 +56,7 @@ function New-IconMarkBitmap([int]$size) {
   return $bmp
 }
 
-$outDir = "C:\Users\User\Documents\Claude\Projects\claude-narrator\desktop"
+$outDir = $PSScriptRoot  # was hard-coded to one machine's path, broke for any contributor cloning elsewhere
 
 # tray icon, flat PNG
 $png256 = New-IconMarkBitmap 256

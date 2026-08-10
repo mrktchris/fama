@@ -6,7 +6,7 @@ In Ovid, Fama lives in a house at the center of the world, built of resounding b
 
 A local, always-on window into what Claude Code is actually doing right now: what it's thinking, which tool it just ran, what came back. Local-first by design: it tails the session transcript files Claude Code already writes on your own machine, no required API calls, no cloud dependency to even open it. Optional cloud voice if you want it to sound less robotic, with a persona and accent you control.
 
-**Privacy, plainly:** the dashboard is 100% local, always. It reads files already on your own disk and never phones home, no account, no telemetry, no analytics, nothing installed or running unless you started it. No transcript content, no usage data, and nothing about what you're working on ever leaves your machine, under any configuration. The *only* thing that ever transmits your transcript content is the optional cloud voice, opt-in, off by default, using your own OpenAI key billed to your own account, never Fama's, and that's the only place raw thinking/text ever leaves your device. Two unrelated, content-free network calls happen regardless of that setting: the app's own UI loads its display font from Google Fonts, and the desktop app checks this repo's GitHub Releases on launch for updates. Neither carries anything about you, your machine, or your work, but "nothing leaves your device, ever" would have been an overstatement, so it isn't claimed here. See [Voice, in detail](#voice-in-detail) below for exactly what's sent when cloud voice is on.
+**Privacy, plainly:** local by default. The dashboard reads files already on your own disk and never phones home, no account, no telemetry, no analytics. When optional cloud voice is enabled, the text being narrated (and, if the rewrite step is on, the raw thinking/text it's condensed from) is sent to OpenAI, using your own key, billed to your own account, never Fama's. That's the only path any transcript content ever takes off your machine. Two separate, content-free network calls happen regardless of that setting: the UI loads its display font from Google Fonts, and the desktop app checks this repo's GitHub Releases on launch. Neither carries anything about you or your work. See [Voice, in detail](#voice-in-detail) below for the exact mechanics.
 
 ![screenshot placeholder: main dashboard with lanes and mascot](docs/screenshot-dashboard.png)
 <!-- Real screenshots go here before this ships anywhere public. Run the app, capture: (1) the main dashboard with a lane or two active, (2) the Settings panel open, (3) the tray icon / native window. Drop them in docs/ with these exact filenames and the placeholders above resolve automatically. -->
@@ -21,13 +21,13 @@ Claude Code already streams everything it does into the chat pane. But that view
 
 **Desktop app (Windows):** grab the latest release, unzip, run `Fama.exe`. See [Releases](../../releases). Windows will show a SmartScreen warning on first launch (unsigned build, see below), click through it.
 
-**From source (any OS with Node):**
+**From source (Node 18+):**
 ```
 git clone https://github.com/mrktchris/fama.git
 cd fama
 npm start
 ```
-Then open http://localhost:4317.
+Then open http://localhost:4317. Windows is the only platform this has actually been run and tested on end to end. The project-folder path encoding has a macOS/Linux code path too, implemented from Claude Code's known naming scheme, but it hasn't been verified against a real Mac or Linux machine, if it's wrong for you, please open an issue.
 
 ## What it does
 
@@ -51,9 +51,9 @@ By default it speaks narrated text and current thinking. Tool-call announcements
 
 **Free tier:** Windows' built-in SAPI voices via the browser, robotic but zero cost, zero setup. Open the app in Edge instead of Chrome for noticeably better free "Natural" neural voices through the same API.
 
-**Cloud tier (optional, costs money):** click the gear icon, paste an OpenAI key, pick a model. `gpt-4o-mini-tts` is the recommended default, it's the only model that honors the accent/style field, and tested competitively on both latency and cost against the older `tts-1`/`tts-1-hd` models (see `CHANGELOG.md` for the actual benchmark numbers, not just a claim). If a cloud call ever fails, that one line falls back to the free voice automatically, you never get silence.
+**Cloud tier (optional, costs money):** click the gear icon, paste an OpenAI key, pick a model. `gpt-4o-mini-tts` is the recommended default, it's the only model that honors the accent/style field, and was a reasonable latency/cost pick against the older `tts-1`/`tts-1-hd` models in informal testing during development, not a rigorous published benchmark. If a cloud call ever fails, that one line falls back to the free voice automatically, you never get silence.
 
-Cost math: lines are capped at 3–30 seconds of speech, live estimate shown in Settings as you adjust the slider. A heavy multi-hour session lands well under $2. Your `.env` file is gitignored and the real key is never echoed back to the browser after you save it, only whether one is configured.
+Cost math: lines are capped at 3–30 seconds of speech, live estimate shown in Settings as you adjust the slider, tracked running total in the Usage panel. It's cheap, real usage lands in cents per session for most people, but treat the live tracker as the real number, not the paragraph you're reading now. Your `.env` file is gitignored and the real key is never echoed back to the browser after you save it, only whether one is configured.
 
 ### Latency
 
@@ -71,7 +71,7 @@ npm install
 npm run electron        # test it first, dev mode
 npx electron-builder --mac --publish never
 ```
-Needs Xcode Command Line Tools (`xcode-select --install`) and Node 16+. Unsigned, so macOS Gatekeeper will block it the first time, right-click the app → Open, once, to approve it.
+Needs Xcode Command Line Tools (`xcode-select --install`) and Node 18+. Unsigned, so macOS Gatekeeper will block it the first time, right-click the app → Open, once, to approve it.
 
 **Updates:** the packaged app checks this repo's GitHub Releases on launch and, if something newer is out, offers to open the Releases page for you. It can't install itself in place yet (see Known limitations below), so "one-click" currently means one click to get to the download, not a fully automatic update. Nothing happens without your click either way.
 

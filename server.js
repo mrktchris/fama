@@ -178,12 +178,26 @@ let ttsConfig = {
 };
 
 // --- usage / spend tracking, local only, persisted to usage.json (gitignored) ---
-const USAGE_PATH = path.join(__dirname, 'usage.json');
-// Best-effort $ estimates. TTS is billed by character for tts-1/tts-1-hd,
-// confirmed against OpenAI's own pricing. gpt-4o-mini-tts prices differently
-// (token-based audio output) and is approximated here at the tts-1 rate,
-// labelled as an estimate in the UI rather than presented as exact.
-const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000015 };
+// Same class of bug as the .env write-path incident, found by the same
+// external audit: this defaulted to path.join(__dirname, ...), which for a
+// packaged build resolves inside resources/app, not per-user data. Nothing
+// secret lives in usage.json, so this was never a credential leak, but it
+// meant usage history didn't survive an update (a fresh package = a fresh
+// empty file) and, same as .env, technically got copied into the zip on
+// every build if a real one existed in the source tree. FAMA_USAGE_PATH lets
+// the desktop shell point this at app.getPath('userData'), matching FAMA_ENV_PATH.
+const USAGE_PATH = process.env.FAMA_USAGE_PATH || path.join(__dirname, 'usage.json');
+// Best-effort $ estimates, labelled as such in the UI rather than presented
+// as exact. tts-1/tts-1-hd are flat per-character billing, confirmed against
+// OpenAI's own pricing. gpt-4o-mini-tts bills audio output at roughly
+// $12/1M units against the same pricing page (plus a separate, much smaller
+// per-token text-input charge this doesn't model, narration lines are short
+// enough that it's noise next to the output cost) — approximated here at
+// that output rate rather than reused from tts-1, closer to the real number
+// but still an approximation: OpenAI's own docs describe this billing
+// structure ambiguously (character vs. token unit) even cross-referenced
+// against two of their own pages, so this is not asserted as exact.
+const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000012 };
 const REWRITE_PRICE_PER_TOKEN = { prompt: 0.00000015, completion: 0.0000006 }; // gpt-4o-mini, $0.15 / $0.60 per 1M
 
 function loadUsage() {
@@ -222,9 +236,14 @@ const BACKLOG_SIZE = 300;
 const MAX_SPEECH_CHARS = 900; // hard backstop, comfortably above even the 20s preset's typical output
 
 function encodeProjectDir(cwd) {
-  // Mirrors Claude Code's own project-folder naming: "C:\Users\User\Documents\Claude"
-  // becomes "C--Users-User-Documents-Claude". Verified against real files on this machine.
-  return cwd.replace(/^([A-Za-z]):\\/, '$1--').replace(/\\/g, '-');
+  // Mirrors Claude Code's own project-folder naming. Windows: "C:\Users\User\Documents\Claude"
+  // becomes "C--Users-User-Documents-Claude" (verified against real files on this machine).
+  // macOS/Linux: "/Users/name/project" becomes "-Users-name-project" (every "/" -> "-",
+  // including the leading one). This half of it is implemented from Claude Code's known
+  // encoding scheme, not verified against a real Mac/Linux machine in this environment,
+  // README calls that out rather than claiming full cross-platform parity untested.
+  if (/^[A-Za-z]:\\/.test(cwd)) return cwd.replace(/^([A-Za-z]):\\/, '$1--').replace(/\\/g, '-');
+  return cwd.replace(/\//g, '-');
 }
 
 function claudeProjectsRoot() {

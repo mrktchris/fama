@@ -53,7 +53,7 @@
   // change the other, that mismatch was a real, confirmed bug, not a
   // hypothetical one.
   const CHARS_PER_WORD = 5.5;
-  const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000015 };
+  const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000012 }; // keep in sync with server.js's own table
   function updateLengthReadout() {
     const seconds = Number(lengthSlider.value);
     const words = Math.max(6, Math.round(seconds * 2.5));
