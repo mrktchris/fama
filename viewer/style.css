@@ -8,8 +8,8 @@
   --text: #ededf0;
   --muted: #8a8a92;
   --muted-2: #55555e;
-  --accent: #7aa2ff;
-  --accent-glow: rgba(122, 162, 255, 0.35);
+  --accent: #3ecfc0;
+  --accent-glow: rgba(62, 207, 192, 0.35);
   --thinking: #b39dff;
   --thinking-glow: rgba(179, 157, 255, 0.35);
   --tool: #ffb454;
@@ -128,7 +128,7 @@ header h1 {
 #voice-mode.cloud {
   color: var(--accent);
   border-color: var(--accent-glow);
-  background: rgba(122, 162, 255, 0.08);
+  background: rgba(62, 207, 192, 0.08);
 }
 
 #voice-toggle {
@@ -369,7 +369,7 @@ main#lanes {
 .lane.is-pinned .lane-current-badge {
   color: var(--accent);
   border-color: var(--accent-glow);
-  background: rgba(122, 162, 255, 0.1);
+  background: rgba(62, 207, 192, 0.1);
 }
 
 .lane-current-badge {
@@ -380,13 +380,51 @@ main#lanes {
   letter-spacing: 0.06em;
   color: var(--accent);
   border: 1px solid var(--accent-glow);
-  background: rgba(122, 162, 255, 0.1);
+  background: rgba(62, 207, 192, 0.1);
   border-radius: 999px;
   padding: 2px 8px;
 }
 .lane.is-current .lane-current-badge { display: inline-block; }
 .lane.is-current { border-color: var(--border); }
 .lane.is-current .lane-title { color: var(--text); }
+
+.lane-drag-handle {
+  flex: 0 0 auto;
+  cursor: grab;
+  opacity: 0.3;
+  font-size: 12px;
+  letter-spacing: -1px;
+}
+.lane-header:hover .lane-drag-handle { opacity: 0.6; }
+.lane.dragging { opacity: 0.4; cursor: grabbing; }
+
+.lane-project {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lane-rename-input {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 1px 6px;
+  min-width: 0;
+}
+.lane-rename-input:focus { outline: none; }
 
 .lane.collapsed .lane-feed { display: none; }
 
@@ -448,8 +486,7 @@ main#lanes {
   z-index: 100;
   padding: 20px;
 }
-.settings-overlay.hidden { display: none; }
-.settings-section.hidden { display: none; }
+.hidden { display: none; }
 
 .settings-modal {
   width: 100%;

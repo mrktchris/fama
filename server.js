@@ -214,13 +214,32 @@ function resolveWatchDir() {
   return path.join(claudeProjectsRoot(), encoded);
 }
 
-const watchDir = resolveWatchDir();
-// Friendly label only, never the absolute path: the desktop shell passes the
-// real project folder's basename in PICO_PROJECT_LABEL (see desktop/main.js),
-// CLI mode falls back to the actual cwd basename since that IS the project
-// dir there. Either way nothing that reveals a full filesystem path (which
-// leaks the OS username on Windows) ever reaches a client.
-const displayProjectName = process.env.PICO_PROJECT_LABEL || path.basename(process.cwd());
+// Multiple projects at once: the desktop shell passes JSON arrays of
+// absolute dirs + friendly labels (CLAUDE_NARRATOR_DIRS / PICO_PROJECT_LABELS,
+// see desktop/main.js). CLI mode (no Electron) still watches exactly the one
+// project it was launched from, wrapped as a one-entry array so the rest of
+// the pipeline doesn't need two code paths. Each project gets a stable id
+// (its index) used to tag every event and group lanes client-side.
+function resolveWatchProjects() {
+  if (process.env.CLAUDE_NARRATOR_DIRS) {
+    let dirs, labels;
+    try {
+      dirs = JSON.parse(process.env.CLAUDE_NARRATOR_DIRS);
+      labels = process.env.PICO_PROJECT_LABELS ? JSON.parse(process.env.PICO_PROJECT_LABELS) : [];
+    } catch {
+      dirs = [];
+    }
+    if (Array.isArray(dirs) && dirs.length) {
+      return dirs.map((dir, i) => ({ id: String(i), dir, name: labels[i] || path.basename(dir) }));
+    }
+  }
+  // Single-project fallback: env override or the cwd-derived default.
+  const dir = resolveWatchDir();
+  const name = process.env.PICO_PROJECT_LABEL || path.basename(process.cwd());
+  return [{ id: '0', dir, name }];
+}
+
+const watchProjects = resolveWatchProjects();
 
 const backlog = [];
 const sseClients = new Set();
@@ -233,43 +252,45 @@ function broadcast(event) {
   for (const res of sseClients) res.write(payload);
 }
 
-function handleNewRecords(records) {
+function handleNewRecords(records, project) {
   for (const record of records) {
     for (const event of eventsFromRecord(record)) {
-      broadcast(event);
+      broadcast(Object.assign(event, { projectId: project.id, projectName: project.name }));
     }
   }
 }
 
 function scanForActiveSessions() {
-  let entries;
-  try {
-    entries = fs.readdirSync(watchDir, { withFileTypes: true });
-  } catch (err) {
-    return; // watch dir doesn't exist yet (brand new project, no sessions written yet)
-  }
   const now = Date.now();
   const seenThisScan = new Set();
-  for (const entry of entries) {
-    // Only top-level *.jsonl. Subagent transcripts live in a nested subagents/
-    // folder and are deliberately skipped in v0.1 (see README roadmap).
-    if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
-    const filePath = path.join(watchDir, entry.name);
-    let stat;
+  for (const project of watchProjects) {
+    let entries;
     try {
-      stat = fs.statSync(filePath);
-    } catch {
-      continue;
+      entries = fs.readdirSync(project.dir, { withFileTypes: true });
+    } catch (err) {
+      continue; // this watch dir doesn't exist yet (brand new project, no sessions written yet)
     }
-    if (now - stat.mtimeMs > ACTIVE_WINDOW_MS) continue; // stale session, not currently active
-    seenThisScan.add(filePath);
-    if (!tailers.has(filePath)) {
-      const tailer = new FileTailer(filePath, handleNewRecords);
-      // Seed at end-of-file: on startup we only stream what happens FROM NOW ON.
-      // Files that already existed keep their history out of the feed on purpose,
-      // this is a live narrator, not a replay tool.
-      tailer.offset = stat.size;
-      tailers.set(filePath, tailer);
+    for (const entry of entries) {
+      // Only top-level *.jsonl. Subagent transcripts live in a nested subagents/
+      // folder and are deliberately skipped in v0.1 (see README roadmap).
+      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
+      const filePath = path.join(project.dir, entry.name);
+      let stat;
+      try {
+        stat = fs.statSync(filePath);
+      } catch {
+        continue;
+      }
+      if (now - stat.mtimeMs > ACTIVE_WINDOW_MS) continue; // stale session, not currently active
+      seenThisScan.add(filePath);
+      if (!tailers.has(filePath)) {
+        const tailer = new FileTailer(filePath, (records) => handleNewRecords(records, project));
+        // Seed at end-of-file: on startup we only stream what happens FROM NOW ON.
+        // Files that already existed keep their history out of the feed on purpose,
+        // this is a live narrator, not a replay tool.
+        tailer.offset = stat.size;
+        tailers.set(filePath, tailer);
+      }
     }
   }
   // Tailers used to only ever get added, never removed, so a long-running
@@ -424,9 +445,18 @@ const server = http.createServer((req, res) => {
     });
     // Used to send the full absolute filesystem path here (fine as a tooltip,
     // still a real leak: it showed up in screenshots/demos/streams, and on
-    // Windows an absolute path always contains the OS username). Sends only a
-    // friendly project name now, never a path, see displayProjectName above.
-    res.write(`data: ${JSON.stringify({ kind: 'system', label: 'connected', detail: 'Live', projectName: displayProjectName })}\n\n`);
+    // Windows an absolute path always contains the OS username). Sends only
+    // friendly project names now, never a path. An array since one server can
+    // now watch several projects at once, see resolveWatchProjects above.
+    const detail = watchProjects.length === 1 ? 'Live' : `Live · ${watchProjects.length} projects`;
+    res.write(
+      `data: ${JSON.stringify({
+        kind: 'system',
+        label: 'connected',
+        detail,
+        projects: watchProjects.map((p) => ({ id: p.id, name: p.name })),
+      })}\n\n`
+    );
     for (const event of backlog) res.write(`data: ${JSON.stringify(event)}\n\n`);
     sseClients.add(res);
     req.on('close', () => sseClients.delete(res));
@@ -609,7 +639,7 @@ server.on('error', (err) => {
 // Bind to loopback only. This feed includes file paths, thinking, and tool
 // output, it has no business being reachable from anything else on the LAN.
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Pico watching: ${watchDir}`);
+  console.log(`Pico watching: ${watchProjects.map((p) => `${p.name} (${p.dir})`).join(', ')}`);
   console.log(
     `voice: ${
       ttsConfig.apiKey

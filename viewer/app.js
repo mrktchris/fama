@@ -22,6 +22,7 @@ window.narrator = narrator; // settings.js drives it directly (test button, refr
 let mostRecentSessionId = null;
 let pinnedSessionId = null; // manual override, click a lane's speaker icon to set this
 let speakingLaneEl = null;
+let multiProjectMode = false; // set once the system event reports >1 watched project, toggles the per-lane project badge
 
 // The session that actually gets to speak: a manual pin always wins over
 // auto-follow, so picking a lane sticks until you pick a different one or
@@ -167,22 +168,90 @@ function updateEmptyHint() {
   emptyHintEl.style.display = lanes.size === 0 ? 'block' : 'none';
 }
 
+// Custom lane names persist across reloads (sessionId -> name you typed),
+// same localStorage pattern as prefs. A session's own first prompt still
+// supplies the default title, this only overrides it once you've actually
+// renamed one.
+const SESSION_NAMES_KEY = 'pico.session-names';
+function loadSessionNames() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_NAMES_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+function saveSessionName(sessionId, name) {
+  const names = loadSessionNames();
+  if (name) names[sessionId] = name;
+  else delete names[sessionId];
+  localStorage.setItem(SESSION_NAMES_KEY, JSON.stringify(names));
+}
+
 function laneFor(sessionId) {
   const key = sessionId || 'unknown';
   if (lanes.has(key)) return lanes.get(key);
 
   const el = document.createElement('section');
   el.className = 'lane';
+  el.draggable = true;
   // Built with createElement/textContent, not innerHTML, sessionId is server
   // data (a Claude-assigned UUID today, but nothing enforces that shape
   // structurally), every other render path in this file already avoids
   // innerHTML for exactly that reason, this was the one exception.
   el.innerHTML = '<div class="lane-header"><span class="lane-live-dot"></span></div><div class="lane-feed"></div>';
   const header = el.querySelector('.lane-header');
+
+  const dragHandle = document.createElement('span');
+  dragHandle.className = 'lane-drag-handle';
+  dragHandle.title = 'Drag to reposition';
+  dragHandle.textContent = '⠿';
+
+  const projectEl = document.createElement('span');
+  projectEl.className = 'lane-project hidden';
+
   const titleEl = document.createElement('span');
   titleEl.className = 'lane-title';
-  titleEl.title = 'session ' + key;
-  titleEl.textContent = 'session ' + key.slice(0, 12);
+  titleEl.title = 'Double-click to rename · session ' + key;
+  const savedNames = loadSessionNames();
+  const customName = savedNames[key];
+  titleEl.textContent = customName || 'session ' + key.slice(0, 12);
+
+  const renameInput = document.createElement('input');
+  renameInput.className = 'lane-rename-input hidden';
+  renameInput.maxLength = 60;
+  function startRename() {
+    renameInput.value = titleEl.textContent;
+    titleEl.classList.add('hidden');
+    renameInput.classList.remove('hidden');
+    renameInput.focus();
+    renameInput.select();
+  }
+  function commitRename() {
+    const value = renameInput.value.trim();
+    renameInput.classList.add('hidden');
+    titleEl.classList.remove('hidden');
+    if (value) {
+      titleEl.textContent = value;
+      lane.titled = true; // manual name wins, don't let the first-prompt title overwrite it
+      saveSessionName(key, value);
+    } else {
+      saveSessionName(key, null);
+    }
+  }
+  titleEl.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    startRename();
+  });
+  renameInput.addEventListener('click', (e) => e.stopPropagation());
+  renameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') renameInput.blur();
+    if (e.key === 'Escape') {
+      renameInput.value = titleEl.textContent;
+      renameInput.blur();
+    }
+  });
+  renameInput.addEventListener('blur', commitRename);
+
   const badgeEl = document.createElement('span');
   badgeEl.className = 'lane-current-badge';
   badgeEl.textContent = 'following';
@@ -196,18 +265,36 @@ function laneFor(sessionId) {
     pinnedSessionId = pinnedSessionId === key ? null : key;
     markCurrentLane();
   });
-  header.append(pinBtn, titleEl, badgeEl);
+  header.append(dragHandle, projectEl, titleEl, renameInput, pinBtn, badgeEl);
   lanesEl.prepend(el);
 
   header.title = 'Click to collapse this session';
   header.addEventListener('click', () => el.classList.toggle('collapsed'));
 
+  // Plain HTML5 drag-and-drop, no library: these are already real DOM nodes
+  // in a simple flex column, reordering is just moving the dragged element
+  // to sit before/after whatever it's currently over.
+  el.addEventListener('dragstart', (e) => {
+    e.dataTransfer.effectAllowed = 'move';
+    el.classList.add('dragging');
+  });
+  el.addEventListener('dragend', () => el.classList.remove('dragging'));
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const dragging = lanesEl.querySelector('.lane.dragging');
+    if (!dragging || dragging === el) return;
+    const rect = el.getBoundingClientRect();
+    const before = e.clientY - rect.top < rect.height / 2;
+    lanesEl.insertBefore(dragging, before ? el : el.nextSibling);
+  });
+
   const lane = {
     el,
     feedEl: el.querySelector('.lane-feed'),
     titleEl: el.querySelector('.lane-title'),
+    projectEl,
     lastTs: Date.now(),
-    titled: false,
+    titled: !!customName,
   };
   lanes.set(key, lane);
   updateEmptyHint();
@@ -307,10 +394,20 @@ source.onmessage = (e) => {
   }
   if (evt.kind === 'system') {
     statusEl.textContent = evt.detail;
-    if (evt.projectName) statusEl.title = 'Watching: ' + evt.projectName;
+    if (Array.isArray(evt.projects) && evt.projects.length) {
+      statusEl.title = 'Watching: ' + evt.projects.map((p) => p.name).join(', ');
+      multiProjectMode = evt.projects.length > 1;
+    }
     return;
   }
   const lane = laneFor(evt.sessionId);
+  // Project badge: only worth showing once more than one project is
+  // actually in play, in the common single-project case it's just noise
+  // repeating what the header tooltip already says.
+  if (evt.projectName && !lane.projectEl.textContent) {
+    lane.projectEl.textContent = evt.projectName;
+  }
+  lane.projectEl.classList.toggle('hidden', !multiProjectMode);
   if (evt.sessionId && evt.sessionId !== mostRecentSessionId) {
     mostRecentSessionId = evt.sessionId;
     if (!pinnedSessionId) markCurrentLane(); // pinned means this activity doesn't change who's speaking

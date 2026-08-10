@@ -10,7 +10,7 @@
     color-scheme: dark;
     --bg: #0a0a0c; --panel: #131316; --panel-2: #17171b; --border: #232328; --border-soft: #1c1c20;
     --text: #ededf0; --muted: #8a8a92; --muted-2: #55555e;
-    --accent: #7aa2ff; --accent-glow: rgba(122,162,255,.35);
+    --accent: #3ecfc0; --accent-glow: rgba(62, 207, 192,.35);
     --thinking: #b39dff; --tool: #ffb454; --result: #4fd18b;
     --sans: "Segoe UI", "Inter", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
@@ -45,6 +45,11 @@
   .btn-secondary { background: var(--panel); color: var(--text); }
   .btn-secondary:hover { border-color: var(--muted-2); }
   .meta-line { margin-top: 16px; font-size: 12.5px; color: var(--muted-2); }
+  .privacy-badge {
+    display: inline-block; margin: 0 auto 22px; padding: 8px 16px; border-radius: 999px;
+    border: 1px solid rgba(79, 209, 139, 0.35); background: rgba(79, 209, 139, 0.08);
+    color: var(--result); font-size: 12.5px; font-weight: 600;
+  }
 
   section { padding: 60px 0; border-bottom: 1px solid var(--border-soft); }
   section:last-of-type { border-bottom: none; }
@@ -96,7 +101,7 @@
       <svg viewBox="0 0 64 64" width="30" height="30">
         <path d="M18 32 Q6 36 11 50 Q21 47 23 36 Z" fill="#17171b" stroke="#232328" stroke-width="1.5"/>
         <path d="M32 6 C18 6 10 20 10 34 C10 49 19 60 32 60 C45 60 54 49 54 34 C54 20 46 6 32 6 Z" fill="#17171b" stroke="#232328" stroke-width="2"/>
-        <path d="M27 6 L22 -3 L33 1 Z" fill="#7aa2ff"/>
+        <path d="M27 6 L22 -3 L33 1 Z" fill="#3ecfc0"/>
         <path d="M50 30 L61 34 L50 39 Z" fill="#ffb454"/>
         <circle cx="39" cy="26" r="4.2" fill="#ededf0"/>
       </svg>
@@ -104,6 +109,7 @@
     <div class="kicker">Free &middot; open source &middot; local-first</div>
     <h1>Hear your agent think.</h1>
     <p class="tagline">A live dashboard and voice for Claude Code. Watch and hear what it's doing, thinking, and running, as it happens, on your own machine.</p>
+    <div class="privacy-badge">🔒 100% local by default &middot; nothing leaves your device unless you turn on optional cloud voice, with your own key</div>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/mrktchris/pico/releases/latest">Download for Windows</a>
       <a class="btn btn-secondary" href="https://github.com/mrktchris/pico">View on GitHub</a>
@@ -140,6 +146,10 @@
       <div class="feature">
         <h3>Live visual dashboard</h3>
         <p>Text, thinking, tool calls, and results, streaming per session, with a small animated mascot that shows idle / thinking / speaking at a glance.</p>
+      </div>
+      <div class="feature">
+        <h3>Watch several projects at once</h3>
+        <p>Not locked to one folder, check as many Claude Code projects as you want, each lane tagged with which project it's from, drag to reorder, rename any lane to whatever you'll actually remember it by.</p>
       </div>
       <div class="feature">
         <h3>Spoken narration</h3>

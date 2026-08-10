@@ -1,6 +1,6 @@
 {
   "name": "pico",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "A quick pico of what your Claude Code agent is thinking, live, as it works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
   "main": "desktop/main.js",
   "bin": {

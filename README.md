@@ -4,6 +4,8 @@
 
 A local, always-on window into what Claude Code is actually doing right now: what it's thinking, which tool it just ran, what came back. Local-first by design: it tails the session transcript files Claude Code already writes on your own machine, no required API calls, no cloud dependency to even open it. Optional cloud voice if you want it to sound less robotic, with a persona and accent you control.
 
+**Privacy, plainly:** the dashboard is 100% local, always. It reads files already on your own disk and never phones home, no account, no telemetry, no analytics, nothing installed or running unless you started it. It works completely offline. The *only* thing that ever leaves your machine is the cloud voice, and that's opt-in, off by default, using your own OpenAI key billed to your own account, never Pico's. Turn it off and nothing at all leaves your device, ever. See [Voice, in detail](#voice-in-detail) below for exactly what's sent when it's on.
+
 ![screenshot placeholder: main dashboard with lanes and mascot](docs/screenshot-dashboard.png)
 <!-- Real screenshots go here before this ships anywhere public. Run the app, capture: (1) the main dashboard with a lane or two active, (2) the Settings panel open, (3) the tray icon / native window. Drop them in docs/ with these exact filenames and the placeholders above resolve automatically. -->
 

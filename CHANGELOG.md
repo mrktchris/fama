@@ -2,6 +2,15 @@
 
 All notable changes to this project, newest first. Versions match `package.json` and the git tags each commit was made under.
 
+## 0.11.0
+
+- **Watch several projects at once.** Onboarding is now a checklist instead of a single pick, and the tray menu's "Manage watched projects…" reopens it later pre-checked with whatever's currently watched, so it reads as "edit the list" rather than "start over." One server process tails all of them; each event carries which project it came from.
+- **Per-lane project badge**, shown automatically once more than one project is actually active, hidden in the common single-project case where it would just repeat the header tooltip.
+- **Rename any lane.** Double-click a lane's title to give it a name that'll actually mean something later ("the migration", "bug hunt"), persists across reloads (keyed by session id), overrides the default first-prompt-derived title.
+- **Drag to reorder lanes.** Plain HTML5 drag-and-drop, no library, live only, not persisted across reload (session ids are one-run-only anyway, so there's nothing meaningful to restore a saved order onto).
+- **New accent color.** The default blue read as generic "AI product blue," identical to most of the category. Replaced with a distinct teal across the app, the landing page, and onboarding, semantic colors (thinking/tool/result/error) unchanged since those carry real meaning.
+- Config migration: existing single-project installs (`watchDirEncoded`) upgrade to the new list shape (`watchDirsEncoded`) automatically on first launch after updating, nothing to reconfigure.
+
 ## 0.10.0
 
 - **Desktop notifications.** Small native bubbles (Settings toggle, on by default) for real errors and for "Claude looks done for now" after a burst of activity goes quiet. Skipped automatically if the window's already visible and focused, no bubble on top of the thing you're already looking at. Reads the same `/events` feed the browser tab does, no duplicated tailing logic.

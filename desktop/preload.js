@@ -7,5 +7,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('narratorSetup', {
   listProjects: () => ipcRenderer.invoke('list-projects'),
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
-  confirmProject: (encoded) => ipcRenderer.invoke('confirm-project', encoded),
+  getCurrentProjects: () => ipcRenderer.invoke('get-current-projects'),
+  confirmProjects: (encodedList) => ipcRenderer.invoke('confirm-projects', encodedList),
 });

@@ -256,10 +256,13 @@ function stopServer() {
   });
 }
 
-async function startServer(watchDirEncoded) {
+async function startServer(watchDirsEncoded) {
   await stopServer();
-  const projectDir = path.join(claudeProjectsRoot(), watchDirEncoded);
-  const projectLabel = path.basename(realCwdFor(projectDir) || watchDirEncoded);
+  // Accept a single encoded dir too (older config, or a direct call), always
+  // work internally as a list, one server can now watch several projects.
+  const encodedList = Array.isArray(watchDirsEncoded) ? watchDirsEncoded : [watchDirsEncoded];
+  const projectDirs = encodedList.map((encoded) => path.join(claudeProjectsRoot(), encoded));
+  const projectLabels = projectDirs.map((dir, i) => path.basename(realCwdFor(dir) || encodedList[i]));
   serverProcess = spawn('node', [path.join(ROOT, 'server.js')], {
     // Real key ended up in a shipped release asset because the packaged app
     // wrote .env next to server.js, inside its own resources folder, by
@@ -268,9 +271,9 @@ async function startServer(watchDirEncoded) {
     // that gets packaged/zipped/reinstalled.
     env: Object.assign({}, process.env, {
       PORT: String(PORT),
-      CLAUDE_NARRATOR_DIR: projectDir,
       PICO_ENV_PATH: path.join(app.getPath('userData'), '.env'),
-      PICO_PROJECT_LABEL: projectLabel,
+      CLAUDE_NARRATOR_DIRS: JSON.stringify(projectDirs),
+      PICO_PROJECT_LABELS: JSON.stringify(projectLabels),
     }),
     windowsHide: true,
   });
@@ -444,18 +447,32 @@ ipcMain.handle('pick-folder', async () => {
   if (result.canceled || !result.filePaths[0]) return null;
   return { encoded: encodeProjectDir(result.filePaths[0]), path: result.filePaths[0], lastActive: Date.now() };
 });
-ipcMain.handle('confirm-project', async (event, encoded) => {
+// Migrated from a single confirmed project to a list: one server can now
+// watch several at once. currentProjects() lets the onboarding window
+// pre-check whatever's already selected when reopened as "manage" rather
+// than first-run setup.
+function currentProjects() {
+  const cfg = loadConfig() || {};
+  if (Array.isArray(cfg.watchDirsEncoded)) return cfg.watchDirsEncoded;
+  if (cfg.watchDirEncoded) return [cfg.watchDirEncoded]; // pre-multi-folder config
+  return [];
+}
+ipcMain.handle('get-current-projects', () => currentProjects());
+ipcMain.handle('confirm-projects', async (event, encodedList) => {
+  const list = Array.isArray(encodedList) ? encodedList.filter(Boolean) : [];
+  if (!list.length) return false; // nothing selected, caller should keep the window open
   // Merge, don't replace: this used to overwrite the whole config file with
-  // just { watchDirEncoded }, silently dropping notificationsEnabled and
-  // launchOnStartup back to defaults every time a project was switched.
-  saveConfig(Object.assign({}, loadConfig(), { watchDirEncoded: encoded }));
+  // just the watched dir(s), silently dropping notificationsEnabled and
+  // launchOnStartup back to defaults every time projects were changed.
+  saveConfig(Object.assign({}, loadConfig(), { watchDirsEncoded: list }));
   if (onboardingWindow) {
     onboardingWindow.close();
     onboardingWindow = null;
   }
-  await startServer(encoded);
+  await startServer(list);
   openMainWindow();
   offerDesktopShortcut();
+  return true;
 });
 
 ipcMain.handle('get-app-prefs', () => getPrefs());
@@ -518,7 +535,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Show', click: () => (mainWindow ? mainWindow.show() : openMainWindow()) },
-      { label: 'Change watched project…', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
+      { label: 'Manage watched projects…', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
       { label: 'Create desktop shortcut', click: () => createDesktopShortcut() },
       { label: 'Check for updates…', click: () => setupAutoUpdate(true) },
       { type: 'separator' },
@@ -539,9 +556,18 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   createTray();
   applyLoginItemSetting(getPrefs().launchOnStartup);
+  // watchDirEncoded (singular) is the pre-0.11.0 shape, still read here so
+  // upgrading users don't get dropped back into onboarding; currentProjects()
+  // normalizes both shapes everywhere else, but the very first read has to
+  // happen before that helper's defined below, so it's inlined here too.
   const config = loadConfig();
-  if (config && config.watchDirEncoded) {
-    await startServer(config.watchDirEncoded);
+  const initialProjects = config && Array.isArray(config.watchDirsEncoded)
+    ? config.watchDirsEncoded
+    : config && config.watchDirEncoded
+      ? [config.watchDirEncoded]
+      : [];
+  if (initialProjects.length) {
+    await startServer(initialProjects);
     openMainWindow();
     offerDesktopShortcut();
   } else {

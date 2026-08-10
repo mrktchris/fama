@@ -7,7 +7,7 @@
   :root {
     color-scheme: dark;
     --bg: #0a0a0c; --panel: #131316; --border: #232328; --text: #ededf0;
-    --muted: #8a8a92; --muted-2: #55555e; --accent: #7aa2ff; --accent-glow: rgba(122,162,255,.35);
+    --muted: #8a8a92; --muted-2: #55555e; --accent: #3ecfc0; --accent-glow: rgba(62, 207, 192,.35);
   }
   * { box-sizing: border-box; }
   body {
@@ -21,24 +21,30 @@
   .project-option {
     background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
     padding: 10px 12px; cursor: pointer; text-align: left; color: var(--text);
-    font-family: inherit; font-size: 12.5px;
+    font-family: inherit; font-size: 12.5px; display: flex; align-items: flex-start; gap: 10px;
   }
   .project-option:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
+  .project-option.checked { border-color: var(--accent); background: rgba(62, 207, 192, 0.08); }
+  .project-option input[type="checkbox"] { margin-top: 2px; accent-color: var(--accent); flex: 0 0 auto; }
+  .project-option .text { min-width: 0; }
   .project-option .path { font-weight: 600; word-break: break-all; }
   .project-option .meta { color: var(--muted-2); font-size: 11px; margin-top: 3px; }
   #empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 30px 10px; }
-  #browse {
-    margin-top: 14px; padding: 9px; border-radius: 8px; border: 1px solid var(--border);
+  #browse, #continue {
+    margin-top: 10px; padding: 9px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--panel); color: var(--text); cursor: pointer; font-size: 12.5px;
   }
   #browse:hover { border-color: var(--muted-2); }
+  #continue { background: var(--accent); color: #0a0a10; border-color: var(--accent); font-weight: 700; }
+  #continue:disabled { background: var(--panel); color: var(--muted-2); border-color: var(--border); cursor: default; font-weight: 400; }
 </style>
 </head>
 <body>
-  <h1>Which project should this watch?</h1>
-  <p class="sub">Claude Code sessions found on this machine, most recently active first. Pick one, this only shows what's already running, nothing about your work is sent anywhere.</p>
+  <h1>Which project(s) should this watch?</h1>
+  <p class="sub">Claude Code sessions found on this machine, most recently active first. Check as many as you want, Pico can watch several at once. This only shows what's already running, nothing about your work is sent anywhere.</p>
   <div id="list"><div id="empty">Looking…</div></div>
   <button id="browse" type="button">Browse for a different folder…</button>
+  <button id="continue" type="button" disabled>Continue</button>
   <script src="onboarding.js"></script>
 </body>
 </html>
