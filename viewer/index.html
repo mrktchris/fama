@@ -8,11 +8,49 @@
 </head>
 <body>
   <header>
+    <div class="mascot idle" id="mascot" aria-hidden="true">
+      <div class="mascot-ring">
+        <svg viewBox="0 0 64 64" width="28" height="28">
+          <g class="bob">
+            <rect class="body" x="8" y="10" width="48" height="44" rx="12" />
+            <rect class="eye eye-l" x="20" y="26" width="8" height="10" rx="2" />
+            <rect class="eye eye-r" x="36" y="26" width="8" height="10" rx="2" />
+            <rect class="mouth" x="24" y="42" width="16" height="4" rx="2" />
+            <circle class="antenna-tip" cx="32" cy="4" r="3" />
+            <line class="antenna-stem" x1="32" y1="7" x2="32" y2="12" />
+            <g class="think-dots">
+              <circle cx="46" cy="6" r="2" />
+              <circle cx="52" cy="0" r="2" />
+              <circle cx="58" cy="-6" r="2" />
+            </g>
+          </g>
+        </svg>
+      </div>
+      <span id="mascot-label">idle</span>
+    </div>
+
     <h1>claude&#8203;-narrator</h1>
     <span id="status">connecting&hellip;</span>
+
+    <div id="voice-panel">
+      <button id="voice-toggle" type="button">&#128264; enable voice</button>
+      <label><input type="checkbox" id="speak-thinking" checked><span>thinking</span></label>
+      <label><input type="checkbox" id="speak-tools"><span>tools</span></label>
+      <select id="voice-select" title="Voice"></select>
+      <input type="range" id="voice-rate" min="0.6" max="1.6" step="0.1" value="1" title="Speech rate">
+    </div>
   </header>
+
   <main id="lanes"></main>
-  <p id="empty-hint">No active sessions yet. Start or continue a Claude Code session in this project and it'll show up here within a second.</p>
+
+  <div id="empty-hint">
+    <div class="empty-icon">&#127908;</div>
+    <p>No active sessions yet.</p>
+    <p class="empty-sub">Start or continue a Claude Code session in this project. It shows up here within a second, and reads itself out loud once voice is on.</p>
+  </div>
+
+  <script src="/mascot.js"></script>
+  <script src="/speech.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

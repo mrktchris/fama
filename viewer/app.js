@@ -16,6 +16,82 @@ const KIND_META = {
   system: { icon: '•', cls: 'k-system' },
 };
 
+const narrator = new Narrator();
+let mostRecentSessionId = null;
+let speakingLaneEl = null;
+
+const speakThinkingEl = document.getElementById('speak-thinking');
+const speakToolsEl = document.getElementById('speak-tools');
+const voiceToggleEl = document.getElementById('voice-toggle');
+const voiceSelectEl = document.getElementById('voice-select');
+const voiceRateEl = document.getElementById('voice-rate');
+
+// --- voice controls -------------------------------------------------------
+
+narrator.onStateChange = (isSpeaking) => {
+  window.mascot.setSpeaking(isSpeaking);
+  if (speakingLaneEl) {
+    speakingLaneEl.classList.remove('lane-speaking');
+    speakingLaneEl = null;
+  }
+  if (isSpeaking) {
+    const lane = lanes.get(mostRecentSessionId || 'unknown');
+    if (lane) {
+      lane.el.classList.add('lane-speaking');
+      speakingLaneEl = lane.el;
+    }
+  }
+};
+
+function refreshVoiceButton() {
+  voiceToggleEl.textContent = narrator.enabled ? '🔊 voice on' : '🔈 enable voice';
+  voiceToggleEl.classList.toggle('active', narrator.enabled);
+}
+
+voiceToggleEl.addEventListener('click', () => {
+  if (!narrator.supported) {
+    voiceToggleEl.textContent = 'speech not supported here';
+    voiceToggleEl.disabled = true;
+    return;
+  }
+  if (narrator.enabled) narrator.disable();
+  else narrator.enable();
+  refreshVoiceButton();
+});
+refreshVoiceButton();
+
+function populateVoices() {
+  const voices = narrator.listVoices();
+  if (!voices.length) return;
+  const current = narrator.voice ? narrator.voice.name : null;
+  voiceSelectEl.innerHTML = '';
+  for (const v of voices) {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = v.name + (v.lang ? ' (' + v.lang + ')' : '');
+    voiceSelectEl.appendChild(opt);
+  }
+  if (current) voiceSelectEl.value = current;
+  else if (voices[0]) narrator.setVoiceByName(voices[0].name);
+}
+if (narrator.supported) {
+  window.speechSynthesis.addEventListener('voiceschanged', populateVoices);
+  populateVoices();
+}
+voiceSelectEl.addEventListener('change', () => narrator.setVoiceByName(voiceSelectEl.value));
+voiceRateEl.addEventListener('input', () => {
+  narrator.rate = Number(voiceRateEl.value);
+});
+
+function truncateForSpeech(text, max) {
+  if (!text || text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  return (lastStop > max * 0.4 ? cut.slice(0, lastStop + 1) : cut) + '…';
+}
+
+// --- lanes ------------------------------------------------------------
+
 function updateEmptyHint() {
   emptyHintEl.style.display = lanes.size === 0 ? 'block' : 'none';
 }
@@ -27,9 +103,9 @@ function laneFor(sessionId) {
   const el = document.createElement('section');
   el.className = 'lane';
   el.innerHTML =
-    '<div class="lane-header"><span class="lane-title">session ' +
-    key.slice(0, 8) +
-    '</span><span class="lane-time"></span></div><div class="lane-feed"></div>';
+    '<div class="lane-header"><span class="lane-live-dot"></span>' +
+    '<span class="lane-title">session ' + key.slice(0, 8) + '</span></div>' +
+    '<div class="lane-feed"></div>';
   lanesEl.prepend(el);
 
   const header = el.querySelector('.lane-header');
@@ -49,7 +125,6 @@ function laneFor(sessionId) {
 }
 
 function addRow(lane, evt) {
-  // First real prompt in a lane becomes its title, much more useful than a session id.
   if (!lane.titled && evt.kind === 'prompt' && evt.detail) {
     lane.titleEl.textContent = evt.detail.slice(0, 70);
     lane.titled = true;
@@ -75,12 +150,39 @@ function addRow(lane, evt) {
   lane.el.classList.remove('idle');
 }
 
+// --- voice + mascot dispatch ------------------------------------------
+
+function handleVoiceAndMascot(evt) {
+  // Only the most recently active session gets to speak. Overlapping robot
+  // voices from several sessions at once is worse than picking wrong.
+  const isFocused = evt.sessionId === mostRecentSessionId;
+
+  if (evt.kind === 'thinking') {
+    window.mascot.pulseThinking();
+    // Thinking fires often and is lower priority than a real narrated line,
+    // only speak it when nothing else is already queued, so it reflects the
+    // CURRENT thought instead of reading a backlog of stale ones.
+    if (isFocused && speakThinkingEl.checked && narrator.pending === 0) {
+      narrator.say(truncateForSpeech(evt.detail, 200));
+    }
+  } else if (evt.kind === 'tool') {
+    window.mascot.pulseTool(evt.label);
+    if (isFocused && speakToolsEl.checked) narrator.say('running ' + evt.label);
+  } else if (evt.kind === 'text' && isFocused) {
+    narrator.say(truncateForSpeech(evt.detail, 280));
+  }
+}
+
+// --- event stream -------------------------------------------------------
+
 const source = new EventSource('/events');
 source.onopen = () => {
   statusEl.textContent = 'live';
+  statusEl.classList.add('live');
 };
 source.onerror = () => {
   statusEl.textContent = 'reconnecting…';
+  statusEl.classList.remove('live');
 };
 source.onmessage = (e) => {
   let evt;
@@ -93,7 +195,9 @@ source.onmessage = (e) => {
     statusEl.textContent = evt.detail;
     return;
   }
+  if (evt.sessionId) mostRecentSessionId = evt.sessionId;
   addRow(laneFor(evt.sessionId), evt);
+  handleVoiceAndMascot(evt);
 };
 
 setInterval(() => {

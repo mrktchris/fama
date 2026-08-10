@@ -14,6 +14,18 @@ Claude Code already streams everything it does into the chat pane. But that view
 
 Nothing leaves the machine. No API key required, because this never talks to Claude, it only reads files Claude Code already writes locally.
 
+## Hearing it
+
+There's a small animated mascot in the header (idle / thinking / speaking / running-a-tool are four different poses) and a voice panel next to it. Click **enable voice** once, browsers refuse to make sound until a page has had one real click, that's the only manual step. After that it reads narration out loud as it happens, using the browser's built-in speech engine (`speechSynthesis`), which means the same zero-API, zero-cost rule applies to the voice too: no key, no cloud call, no per-character billing, it's your OS's own installed voices.
+
+By default it speaks the narrated text (`text` blocks) and current thinking (`thinking` blocks). Tool-call announcements ("running Read", "running Bash"...) are off by default since they fire far more often and get noisy fast, flip the **tools** switch if you want those read too. Only the most recently active session speaks, so two sessions running at once don't talk over each other, the quiet one just narrates silently in its lane until it becomes the active one.
+
+Thinking is spoken opportunistically, not queued: if you're mid-thought faster than the voice can keep up, it speaks whatever's current and skips the backlog rather than reading three-minute-old reasoning while you're already five steps further along.
+
+### About the sprites
+
+The original ask was to pull sprites from craftpix.net. Most of that marketplace's packs aren't licensed for redistribution in a public repo, and some are paid, so instead of embedding someone else's licensed art in a repo with your name on it, the mascot is original: plain SVG shapes animated with CSS, no image files, no license to track, loads instantly. If you own a craftpix (or any) sprite sheet you want in its place, drop the PNG in `viewer/assets/` and swap the `<svg>` block in `viewer/index.html` for an `<img>` using the same `idle` / `thinking` / `speaking` / `tool` classes, the animation state machine in `mascot.js` doesn't care what's rendering inside it.
+
 ## Setup
 
 Requires Node.js 16+ (already on this machine, Claude Code's own hooks run on it).
@@ -51,9 +63,10 @@ Click a lane's header to collapse it if you don't want it visible. For real isol
 ## Roadmap
 
 - [ ] Subagent lanes, nested under their parent session (currently skipped)
-- [ ] Thinking-block collapse toggle, on by default right now
+- [ ] Per-lane manual "listen to this one" pin, right now it auto-follows whichever session was most recently active
 - [ ] Tray icon / native window instead of a browser tab
 - [ ] Desktop notification when a session needs a permission decision
+- [ ] Higher-quality voice option (cloud TTS) as an opt-in, deliberately not the default since it costs money and a key, unlike everything else here
 
 ## License
 
