@@ -6,6 +6,31 @@
 // .env accomplishes, the UI is a convenience layer, not a separate system.
 
 (function () {
+  // Accent color: purely client-side, applies instantly, no server round
+  // trip, no Save needed, this is presentation only. Persists in
+  // localStorage so it survives a reload, same pattern as the other
+  // client-only prefs (voice, thinking/tools toggles, lane names).
+  const ACCENT_KEY = 'fama.accent';
+  const swatches = document.querySelectorAll('#accent-swatches .swatch');
+  function applyAccent(hex, glowRgb) {
+    document.documentElement.style.setProperty('--accent', hex);
+    document.documentElement.style.setProperty('--accent-glow', `rgba(${glowRgb}, 0.35)`);
+    swatches.forEach((s) => s.classList.toggle('active', s.dataset.accent === hex));
+  }
+  swatches.forEach((swatch) => {
+    swatch.addEventListener('click', () => {
+      applyAccent(swatch.dataset.accent, swatch.dataset.glow);
+      localStorage.setItem(ACCENT_KEY, JSON.stringify({ hex: swatch.dataset.accent, glow: swatch.dataset.glow }));
+    });
+  });
+  try {
+    const saved = JSON.parse(localStorage.getItem(ACCENT_KEY));
+    if (saved && saved.hex) applyAccent(saved.hex, saved.glow);
+    else swatches[0] && swatches[0].classList.add('active'); // bronze default, matches the CSS default already in place
+  } catch {
+    swatches[0] && swatches[0].classList.add('active');
+  }
+
   const overlay = document.getElementById('settings-overlay');
   const toggleBtn = document.getElementById('settings-toggle');
   const closeBtn = document.getElementById('settings-close');

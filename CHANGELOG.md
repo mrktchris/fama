@@ -2,6 +2,14 @@
 
 All notable changes to this project, newest first. Versions match `package.json` and the git tags each commit was made under.
 
+## 0.12.2
+
+- **Real bug, fixed, verified end to end:** cloud voice had been silently broken by a stale Windows *user*-level `OPENAI_API_KEY` environment variable (set during an even older, pre-Pico naming pass) shadowing a genuinely valid key correctly saved through Settings. `process.env` used to win over `.env` for every OpenAI-related config field, the usual dotenv convention; flipped so `.env` (what Settings actually writes) wins, a real environment variable only fills in when no `.env` value exists yet at all. Confirmed with the same key: hard 401 before this fix, a real synthesized audio file after it. The stale variable itself was also removed from this machine.
+- **Real automated test suite**, 29 tests, `node:test`, zero new dependencies: path encoding (Windows and the new Linux/macOS path), transcript parsing (including the 0.12.1 thinking-truncation fix), `FileTailer` (partial lines, UTF-8 boundary safety, corrupt-line handling, truncation/rotation), and a real HTTP integration test that spawns the server and exercises the Host-header allowlist, CSRF token enforcement, the path-traversal guard, and `/config`'s key-never-echoed contract. `lib/paths.js` extracted as a shared module, `encodeProjectDir` was two independently hand-copied implementations before (server.js and desktop/main.js), zero tests to catch drift between them.
+- **CI added and verified actually running**, not just wired up and assumed correct: GitHub Actions runs the suite on Node 18 and 22 on every push/PR, plus a Windows job that builds the real package and runs `verify-package.js` against it, the exact gate that would have caught the v0.12.0 log-file leak before upload. Confirmed green on a real run, all three jobs, before writing this entry.
+- **New: accent color picker** in Settings (Appearance section), five presets, applies instantly, no Save needed, persists per device. First concrete answer to "more ways to customize the UI."
+- Checked, not changed: `npm audit` reports 13 vulnerabilities in `electron-builder`'s `node-tar` dependency chain, all build-tooling devDependencies. Confirmed empirically (not assumed) that none of them ship inside the actual packaged app — `--prune` already strips devDependencies, and the one `@electron` folder that does appear in a built package is empty. Real risk is to the build machine during `npm install`, not to anyone who downloads a release. The available fix is a breaking `electron-builder` major-version bump; not forced through blind in this pass, flagged as its own dedicated task instead.
+
 ## 0.12.1
 
 Fixes from an independent external audit of the public repo and released package, verified against real code and a real running app before acting on any of it, not applied on the auditor's word alone. **v0.12.0 is withdrawn, this supersedes it.**

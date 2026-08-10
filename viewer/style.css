@@ -635,6 +635,19 @@ main#lanes {
 
 .settings-field input[type="text"]:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.swatch-row { display: flex; gap: 8px; }
+.swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.swatch:hover { transform: scale(1.12); }
+.swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--text); }
+
 @media (max-width: 620px) {
   main#lanes { grid-template-columns: 1fr; }
 }

@@ -1,5 +1,7 @@
 # Fama
 
+[![CI](https://github.com/mrktchris/fama/actions/workflows/ci.yml/badge.svg)](https://github.com/mrktchris/fama/actions/workflows/ci.yml)
+
 **Hear your Claude Code agent think, out loud, live, as it works.**
 
 In Ovid, Fama lives in a house at the center of the world, built of resounding bronze — no doors, a thousand openings, every sound that enters is caught and sent back out, instantly, without rest. That's the mechanism this app borrows: it tails a live transcript and speaks it back to you as it happens. The myth's Fama mixes lies in with the truth; this one doesn't — it only repeats what's real, nothing invented, nothing sent anywhere it shouldn't be.
@@ -102,12 +104,14 @@ Those are audio-only, hook- or CLI-triggered. What's different here: a standalon
 - [ ] Subagent lanes, nested under their parent session
 - [ ] Detect when a session is specifically waiting on a permission decision, not just gone quiet, and say so in the notification differently
 - [ ] Bundle a Node runtime so the desktop app needs zero prerequisites
-- [ ] Upgrade Electron/electron-builder (current `npm audit` reports vulnerable dependency nodes; a major-version bump needs its own dedicated test pass, not a same-day fix)
-- [ ] Automated tests (parsing, tailing, path encoding, CSRF/Host handling) and a CI pipeline that builds and scans a release from a clean checkout
+- [ ] Upgrade Electron/electron-builder (current `npm audit` reports 13 vulnerabilities, all in build-tooling devDependencies confirmed not to ship in the actual package; still worth clearing, a major-version bump needs its own dedicated test pass, not a same-day fix)
+- [ ] Signed installer, once the NSIS/Developer-Mode wall (see Known limitations) is solved via CI
 
 ## Contributing
 
 Issues and PRs welcome, this is a small project and every bit helps. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the code's organized, how to run it locally, and what a good PR looks like here. Found a security issue (not just a bug)? See [SECURITY.md](SECURITY.md) instead of opening a public issue.
+
+`npm test` runs the automated suite (path encoding, transcript parsing, file tailing, a real HTTP integration test against the server) — zero new dependencies, just Node's own built-in test runner. CI runs it on every push and PR, plus a Windows job that builds the real package and scans it for anything that shouldn't ship.
 
 ## License
 
