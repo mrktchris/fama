@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/csierra172/aloud.git"
+    "url": "https://github.com/mrktchris/aloud.git"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"
@@ -53,7 +53,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "csierra172",
+      "owner": "mrktchris",
       "repo": "aloud"
     }
   }
