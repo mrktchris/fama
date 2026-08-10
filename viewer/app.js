@@ -148,7 +148,7 @@ function laneFor(sessionId) {
   el.innerHTML =
     '<div class="lane-header"><span class="lane-live-dot"></span>' +
     '<span class="lane-title" title="session ' + key + '">session ' + key.slice(0, 12) + '</span>' +
-    '<span class="lane-current-badge">attached</span></div>' +
+    '<span class="lane-current-badge">following</span></div>' +
     '<div class="lane-feed"></div>';
   lanesEl.prepend(el);
 
@@ -249,6 +249,7 @@ source.onmessage = (e) => {
   }
   if (evt.kind === 'system') {
     statusEl.textContent = evt.detail;
+    if (evt.path) statusEl.title = 'Watching: ' + evt.path;
     return;
   }
   const lane = laneFor(evt.sessionId);

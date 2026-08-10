@@ -24,7 +24,7 @@
     try {
       fetch('/client-error', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' },
         body: JSON.stringify({ message }),
       }).catch(() => {});
     } catch {
@@ -41,6 +41,12 @@
     this.cloudVoice = false;
     this._chain = Promise.resolve();
     this._audioEl = null;
+    this._controller = null; // in-flight cloud fetch, abortable
+    this._generation = 0; // bumped by stop(), a resolving fetch from a prior
+    // generation is a stale result, not something that should ever start
+    // playing after voice was turned off in the meantime. Found by external
+    // review: stop() reset internal state but never actually cancelled an
+    // in-flight /speak request, so audio could start playing after "off".
 
     if (this.supported) {
       window.speechSynthesis.addEventListener('voiceschanged', () => this._restoreVoice());
@@ -134,18 +140,27 @@
       }
     },
     _speakCloud(text, kind) {
+      const generation = this._generation;
+      this._controller = new AbortController();
+      const isStale = () => generation !== this._generation;
       return fetch('/speak', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' },
         body: JSON.stringify({ text, kind, speed: this.rate }),
+        signal: this._controller.signal,
       })
         .then((resp) => {
+          if (isStale()) throw new Error('stopped, discarding stale response');
           if (!resp.ok) throw new Error('tts request failed: ' + resp.status);
           return resp.blob();
         })
         .then(
           (blob) =>
             new Promise((resolve, reject) => {
+              if (isStale()) {
+                reject(new Error('stopped, discarding stale response'));
+                return;
+              }
               const url = URL.createObjectURL(blob);
               const audio = this._audioEl || new Audio();
               this._audioEl = audio;
@@ -178,9 +193,17 @@
     },
     stop() {
       this.pending = 0;
+      this._generation += 1; // any in-flight _speakCloud from before this point is now stale
       this._chain = Promise.resolve();
+      if (this._controller) {
+        this._controller.abort();
+        this._controller = null;
+      }
       if (this.supported) window.speechSynthesis.cancel();
-      if (this._audioEl) this._audioEl.pause();
+      if (this._audioEl) {
+        this._audioEl.pause();
+        this._audioEl.removeAttribute('src'); // stops it from resuming/reloading the old blob on next play()
+      }
       this.onStateChange && this.onStateChange(false);
     },
   };

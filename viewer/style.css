@@ -143,10 +143,19 @@ header h1 {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 #voice-toggle:hover { border-color: var(--muted-2); }
+/* A border glow alone read as "barely different from off" in practice, this
+   needs to be unmistakable at a glance, not something you have to squint at. */
 #voice-toggle.active {
+  background: var(--accent);
   border-color: var(--accent);
-  background: var(--panel-2);
-  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 16px -4px var(--accent-glow);
+  color: #0a0a10;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 0 20px -2px var(--accent-glow);
+  animation: voice-on-pulse 2.4s ease-in-out infinite;
+}
+@keyframes voice-on-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent-glow), 0 0 20px -2px var(--accent-glow); }
+  50% { box-shadow: 0 0 0 1px var(--accent-glow), 0 0 28px 2px var(--accent-glow); }
 }
 
 #settings-toggle {
@@ -255,7 +264,11 @@ header h1 {
 
 main#lanes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  /* auto-fit, not auto-fill: auto-fill reserves empty tracks for columns that
+     have no content, which is exactly what produced the huge dead space in a
+     wide window with only 1-2 active lanes, confirmed and fixed. auto-fit
+     collapses those empty tracks so real lanes actually claim the width. */
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
   gap: 14px;
   padding: 18px 20px 40px;
   align-items: start;
@@ -322,7 +335,10 @@ main#lanes {
 .lane.collapsed .lane-feed { display: none; }
 
 .lane-feed {
-  max-height: 320px;
+  /* Was a flat 320px regardless of window size, cramped in a full desktop
+     window. Scales with viewport now, still capped so a single lane can't
+     eat the whole screen when there's only one active session. */
+  max-height: clamp(320px, calc(100vh - 260px), 680px);
   overflow-y: auto;
   padding: 8px 6px;
   font-family: var(--mono);

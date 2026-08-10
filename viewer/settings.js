@@ -26,10 +26,14 @@
   const removeBtn = document.getElementById('settings-remove-key');
   const saveStatusEl = document.getElementById('settings-save-status');
 
-  // Mirrors the server's own formula (see narrationPreset in server.js) so the
-  // estimate on screen matches what actually gets sent, without a round trip.
+  // Mirrors the server's own PRICE_PER_CHAR table (server.js) exactly, on
+  // purpose: these two fell out of sync when gpt-4o-mini-tts was added here
+  // without a matching entry, so the estimate shown before you save quietly
+  // didn't match what the usage tracker recorded after. If you change one,
+  // change the other, that mismatch was a real, confirmed bug, not a
+  // hypothetical one.
   const CHARS_PER_WORD = 5.5;
-  const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003 };
+  const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000015 };
   function updateLengthReadout() {
     const seconds = Number(lengthSlider.value);
     const words = Math.max(6, Math.round(seconds * 2.5));
@@ -37,7 +41,7 @@
     const price = PRICE_PER_CHAR[modelSelect.value] || PRICE_PER_CHAR['tts-1-hd'];
     const cost = chars * price;
     lengthReadout.textContent = `~${seconds}s, ~${words} words`;
-    lengthCost.textContent = `~$${cost.toFixed(4)} per line at ${modelSelect.value}, more length is directly more credits`;
+    lengthCost.textContent = `~$${cost.toFixed(4)} estimated per line at ${modelSelect.value}, more length is directly more credits`;
   }
   lengthSlider.addEventListener('input', updateLengthReadout);
   modelSelect.addEventListener('change', updateLengthReadout);
@@ -66,11 +70,14 @@
 
   function fmtMoney(n) {
     // Sub-cent totals are the common case here, $0.00 for everything reads as
-    // broken, so show more precision until the number actually earns fewer digits.
-    if (n === 0) return '$0.00';
-    if (n < 0.01) return '$' + n.toFixed(4);
-    if (n < 1) return '$' + n.toFixed(3);
-    return '$' + n.toFixed(2);
+    // broken, so show more precision until the number actually earns fewer
+    // digits. The leading ~ is deliberate: gpt-4o-mini-tts is actually billed
+    // per token, not per character, this tracker approximates it at the
+    // per-character rate, it's a real estimate, not a synced-to-billing number.
+    if (n === 0) return '~$0.00';
+    if (n < 0.01) return '~$' + n.toFixed(4);
+    if (n < 1) return '~$' + n.toFixed(3);
+    return '~$' + n.toFixed(2);
   }
 
   function refreshUsage() {
@@ -95,7 +102,7 @@
 
   usageResetBtn.addEventListener('click', () => {
     if (!confirm('Reset the usage counter to $0.00? This only zeroes the local tracker, it has no effect on your actual OpenAI billing.')) return;
-    fetch('/usage/reset', { method: 'POST' }).then(refreshUsage);
+    fetch('/usage/reset', { method: 'POST', headers: { 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' } }).then(refreshUsage);
   });
 
   function open() {
@@ -162,7 +169,7 @@
     );
     return fetch('/settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' },
       body: JSON.stringify(body),
     })
       .then((r) => r.json())

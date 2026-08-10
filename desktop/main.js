@@ -178,7 +178,25 @@ function listAvailableProjects() {
   return projects;
 }
 
-function startServer(watchDirEncoded) {
+// Found by external review, confirmed real: switching projects called
+// startServer() again without ever stopping the previous child, leaking the
+// old process (still holding the port) and risking EADDRINUSE on the new one,
+// with serverProcess overwritten so the leaked one couldn't even be reached
+// to clean up later. stopServer() now actually waits for exit before a new
+// one starts.
+function stopServer() {
+  if (!serverProcess) return Promise.resolve();
+  const proc = serverProcess;
+  serverProcess = null;
+  return new Promise((resolve) => {
+    proc.once('exit', resolve);
+    proc.kill();
+    setTimeout(resolve, 2000); // don't hang forever if the child won't die
+  });
+}
+
+async function startServer(watchDirEncoded) {
+  await stopServer();
   const projectDir = path.join(claudeProjectsRoot(), watchDirEncoded);
   serverProcess = spawn('node', [path.join(ROOT, 'server.js')], {
     env: Object.assign({}, process.env, { PORT: String(PORT), CLAUDE_NARRATOR_DIR: projectDir }),
@@ -242,13 +260,13 @@ ipcMain.handle('pick-folder', async () => {
   if (result.canceled || !result.filePaths[0]) return null;
   return { encoded: encodeProjectDir(result.filePaths[0]), path: result.filePaths[0], lastActive: Date.now() };
 });
-ipcMain.handle('confirm-project', (event, encoded) => {
+ipcMain.handle('confirm-project', async (event, encoded) => {
   saveConfig({ watchDirEncoded: encoded });
   if (onboardingWindow) {
     onboardingWindow.close();
     onboardingWindow = null;
   }
-  startServer(encoded);
+  await startServer(encoded);
   openMainWindow();
 });
 
@@ -270,11 +288,11 @@ function createTray() {
   );
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createTray();
   const config = loadConfig();
   if (config && config.watchDirEncoded) {
-    startServer(config.watchDirEncoded);
+    await startServer(config.watchDirEncoded);
     openMainWindow();
   } else {
     openOnboardingWindow();

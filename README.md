@@ -37,7 +37,7 @@ Then open http://localhost:4317.
 2. `server.js` watches that directory, tails new lines as they're appended (byte-offset based, it never re-reads history), and normalizes each into a small event.
 3. Those events stream to the browser over SSE. The viewer groups them into one lane per active session.
 
-Nothing leaves the machine unless you turn on cloud voice, and even then only the narrated line itself goes to OpenAI, on your own key, billed to your own account.
+Nothing leaves the machine unless you turn on cloud voice. Be precise about what "on" means: with the rewrite step enabled (the default once cloud voice is configured), the **raw thinking/text content is sent to OpenAI first**, to be condensed, and the rewritten result is then sent again for speech synthesis. If rewriting fails for any reason, the raw text goes to speech synthesis directly instead of being dropped. Either way, it's your own key, billed to your own account, and it's exactly one line at a time, on demand, never a bulk transcript upload, but "only the narrated line" undersold it, the source text goes out too when summarizing is on.
 
 ## Voice, in detail
 

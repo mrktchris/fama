@@ -23,7 +23,26 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { FileTailer } = require('./lib/tail');
+
+// A fresh random token per process, required as a header on every route that
+// mutates anything or spends money. Not persisted anywhere, not needed to be:
+// it only has to prove the caller is the actual page this server just served,
+// not some other tab/site. Delivered to the page by injecting it into
+// index.html at serve time (see the static handler below), so only same-
+// origin JS ever sees it, a cross-origin fetch can't read a response to
+// extract it, and a plain <form> POST (the classic no-JS CSRF vector) can't
+// set a custom header at all. Found missing entirely by external review:
+// a malicious webpage could otherwise trigger real, billable /speak calls
+// against a visitor's local Aloud instance just by POSTing to it.
+const AUTH_TOKEN = crypto.randomBytes(24).toString('hex');
+function requireAuth(req, res) {
+  if (req.headers['x-aloud-token'] === AUTH_TOKEN) return true;
+  res.writeHead(403, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'missing or invalid token' }));
+  return false;
+}
 const { eventsFromRecord } = require('./lib/parse');
 
 const ENV_PATH = path.join(__dirname, '.env');
@@ -214,6 +233,7 @@ function scanForActiveSessions() {
     return; // watch dir doesn't exist yet (brand new project, no sessions written yet)
   }
   const now = Date.now();
+  const seenThisScan = new Set();
   for (const entry of entries) {
     // Only top-level *.jsonl. Subagent transcripts live in a nested subagents/
     // folder and are deliberately skipped in v0.1 (see README roadmap).
@@ -226,6 +246,7 @@ function scanForActiveSessions() {
       continue;
     }
     if (now - stat.mtimeMs > ACTIVE_WINDOW_MS) continue; // stale session, not currently active
+    seenThisScan.add(filePath);
     if (!tailers.has(filePath)) {
       const tailer = new FileTailer(filePath, handleNewRecords);
       // Seed at end-of-file: on startup we only stream what happens FROM NOW ON.
@@ -234,6 +255,13 @@ function scanForActiveSessions() {
       tailer.offset = stat.size;
       tailers.set(filePath, tailer);
     }
+  }
+  // Tailers used to only ever get added, never removed, so a long-running
+  // process (the whole point of the tray icon) would keep statSync/open/poll
+  // cycling on every session it had ever seen go active, forever. Anything
+  // that aged out of the active window this scan gets dropped.
+  for (const filePath of tailers.keys()) {
+    if (!seenThisScan.has(filePath)) tailers.delete(filePath);
   }
 }
 
@@ -377,7 +405,10 @@ const server = http.createServer((req, res) => {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     });
-    res.write(`data: ${JSON.stringify({ kind: 'system', label: 'connected', detail: `watching ${watchDir}` })}\n\n`);
+    // Full filesystem path used to go straight into the visible status text,
+    // which showed up in screenshots/demos/streams for no good reason. Now
+    // it's a hover tooltip only, the visible text is just "Live".
+    res.write(`data: ${JSON.stringify({ kind: 'system', label: 'connected', detail: 'Live', path: watchDir })}\n\n`);
     for (const event of backlog) res.write(`data: ${JSON.stringify(event)}\n\n`);
     sseClients.add(res);
     req.on('close', () => sseClients.delete(res));
@@ -393,6 +424,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.url === '/client-error' && req.method === 'POST') {
+    if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then((body) => {
         console.error(`[client] ${(body && body.message) || 'unknown client error'}`);
@@ -413,6 +445,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.url === '/usage/reset' && req.method === 'POST') {
+    if (!requireAuth(req, res)) return;
     usage = { totalCost: 0, ttsCalls: 0, ttsChars: 0, rewriteCalls: 0, rewriteTokens: 0, since: new Date().toISOString() };
     saveUsage();
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -421,6 +454,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.url === '/settings' && req.method === 'POST') {
+    if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then((body) => {
         const typedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
@@ -452,6 +486,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.url === '/speak' && req.method === 'POST') {
+    if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then(async (body) => {
         const rawText = (body && body.text ? String(body.text) : '').slice(0, MAX_SPEECH_CHARS);
@@ -526,6 +561,14 @@ const server = http.createServer((req, res) => {
       res.writeHead(404);
       res.end('not found');
       return;
+    }
+    // index.html gets the auth token injected at serve time, this is the
+    // ONLY place it's ever handed out, and only to same-origin page loads,
+    // a cross-origin fetch can't read this response body to extract it.
+    if (path.basename(filePath) === 'index.html') {
+      data = Buffer.from(
+        data.toString('utf8').replace('</head>', `<script>window.__ALOUD_TOKEN__=${JSON.stringify(AUTH_TOKEN)};</script></head>`)
+      );
     }
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
     res.end(data);
