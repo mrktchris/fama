@@ -20,41 +20,69 @@ const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
+// Found by audit: with no single-instance lock, double-clicking the exe again
+// (very plausible, since closing the window hides it instead of quitting, and
+// a first-time user has no way to know that) spawns a second server that
+// dies uncaught on EADDRINUSE while its window quietly loads against the
+// FIRST instance's still-live server, two processes/tray icons pretending
+// to be one app, and quitting the wrong one kills the real one.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
+
 // One-click updates: checks the GitHub Releases feed for this repo (see the
 // "publish" block in package.json) on launch. Silent if there's nothing new,
 // which is the common case, only interrupts when there's an actual decision
 // to make. Does nothing at all in dev mode (unpackaged), electron-updater
 // requires a real packaged build to have anything to check against.
-function setupAutoUpdate() {
+//
+// Listeners registered once, module scope, not inside setupAutoUpdate() (that
+// used to re-register a full set on every call, stacking duplicate dialogs
+// after the first manual "Check for updates" click). lastCheckWasManual is
+// how the update-not-available handler knows whether to say anything: silent
+// on the automatic startup check (the common case), a real dialog when you
+// actually asked.
+let lastCheckWasManual = false;
+autoUpdater.autoDownload = false;
+autoUpdater.on('update-available', (info) => {
+  dialog
+    .showMessageBox({
+      type: 'info',
+      title: 'Update available',
+      message: `Pico ${info.version} is available (you're on ${app.getVersion()}). Download it now?`,
+      buttons: ['Download', 'Not now'],
+      defaultId: 0,
+    })
+    .then((r) => {
+      if (r.response === 0) autoUpdater.downloadUpdate();
+    });
+});
+autoUpdater.on('update-downloaded', () => {
+  dialog
+    .showMessageBox({
+      type: 'info',
+      title: 'Update ready',
+      message: 'Downloaded. Restart now to finish installing?',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+    })
+    .then((r) => {
+      if (r.response === 0) autoUpdater.quitAndInstall();
+    });
+});
+autoUpdater.on('error', (err) => console.error('[autoUpdater]', err));
+autoUpdater.on('update-not-available', () => {
+  // Found by audit: clicking "Check for updates" when already current did
+  // nothing visible, reads as broken rather than as good news.
+  if (lastCheckWasManual) {
+    dialog.showMessageBox({ type: 'info', title: 'Up to date', message: `You're on the latest version (${app.getVersion()}).` });
+  }
+});
+
+function setupAutoUpdate(manualCheck) {
   if (!app.isPackaged) return;
-  autoUpdater.autoDownload = false;
-  autoUpdater.on('update-available', (info) => {
-    dialog
-      .showMessageBox({
-        type: 'info',
-        title: 'Update available',
-        message: `Aloud ${info.version} is available (you're on ${app.getVersion()}). Download it now?`,
-        buttons: ['Download', 'Not now'],
-        defaultId: 0,
-      })
-      .then((r) => {
-        if (r.response === 0) autoUpdater.downloadUpdate();
-      });
-  });
-  autoUpdater.on('update-downloaded', () => {
-    dialog
-      .showMessageBox({
-        type: 'info',
-        title: 'Update ready',
-        message: 'Downloaded. Restart now to finish installing?',
-        buttons: ['Restart now', 'Later'],
-        defaultId: 0,
-      })
-      .then((r) => {
-        if (r.response === 0) autoUpdater.quitAndInstall();
-      });
-  });
-  autoUpdater.on('error', (err) => console.error('[autoUpdater]', err));
+  lastCheckWasManual = !!manualCheck;
   autoUpdater.checkForUpdates().catch((err) => console.error('[autoUpdater] check failed', err));
 }
 
@@ -199,12 +227,31 @@ async function startServer(watchDirEncoded) {
   await stopServer();
   const projectDir = path.join(claudeProjectsRoot(), watchDirEncoded);
   serverProcess = spawn('node', [path.join(ROOT, 'server.js')], {
-    env: Object.assign({}, process.env, { PORT: String(PORT), CLAUDE_NARRATOR_DIR: projectDir }),
+    // Real key ended up in a shipped release asset because the packaged app
+    // wrote .env next to server.js, inside its own resources folder, by
+    // default. This routes it into Electron's actual per-user data dir
+    // instead, same place config.json already lives, never inside anything
+    // that gets packaged/zipped/reinstalled.
+    env: Object.assign({}, process.env, {
+      PORT: String(PORT),
+      CLAUDE_NARRATOR_DIR: projectDir,
+      PICO_ENV_PATH: path.join(app.getPath('userData'), '.env'),
+    }),
     windowsHide: true,
   });
   serverProcess.stdout.on('data', (d) => console.log(`[server] ${d}`.trim()));
   serverProcess.stderr.on('data', (d) => console.error(`[server] ${d}`.trim()));
   serverProcess.on('exit', (code) => console.log(`[server] exited with code ${code}`));
+  // Found by audit: spawn() with no 'error' listener means a missing `node`
+  // binary (the one documented prerequisite this app has) threw an unhandled
+  // exception and took down the entire Electron main process, silently, no
+  // window, no dialog. This is the single most likely first-run dead end.
+  serverProcess.on('error', (err) => {
+    dialog.showErrorBox(
+      'Pico could not start',
+      `Failed to launch the local server: ${err.message}\n\nThis usually means Node.js isn't installed or isn't on your PATH. Get it from nodejs.org, then relaunch Pico.`
+    );
+  });
 }
 
 let isQuitting = false;
@@ -216,7 +263,7 @@ function openMainWindow() {
     minWidth: 420,
     minHeight: 400,
     backgroundColor: '#0a0a0c',
-    title: 'Aloud',
+    title: 'Pico',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: { contextIsolation: true, spellcheck: true, autoplayPolicy: 'no-user-gesture-required' },
   });
@@ -244,7 +291,7 @@ function openOnboardingWindow() {
     height: 560,
     resizable: false,
     backgroundColor: '#0a0a0c',
-    title: 'Aloud setup',
+    title: 'Pico setup',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -276,17 +323,26 @@ function createTray() {
   } catch {
     return; // icon missing or platform quirk, tray is a nice-to-have, not load-bearing
   }
-  tray.setToolTip('Aloud');
+  tray.setToolTip('Pico');
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Show', click: () => (mainWindow ? mainWindow.show() : openMainWindow()) },
       { label: 'Change watched project…', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
-      { label: 'Check for updates…', click: () => setupAutoUpdate() },
+      { label: 'Check for updates…', click: () => setupAutoUpdate(true) },
       { type: 'separator' },
       { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
     ])
   );
 }
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    openMainWindow();
+  }
+});
 
 app.whenReady().then(async () => {
   createTray();

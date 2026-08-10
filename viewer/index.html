@@ -3,25 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aloud</title>
+<title>Pico</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header>
     <div class="mascot idle" id="mascot" aria-hidden="true">
       <div class="mascot-ring">
-        <svg viewBox="0 0 64 64" width="28" height="28">
+        <svg viewBox="0 0 64 64" width="30" height="30">
           <g class="bob">
-            <rect class="body" x="8" y="10" width="48" height="44" rx="12" />
-            <rect class="eye eye-l" x="20" y="26" width="8" height="10" rx="2" />
-            <rect class="eye eye-r" x="36" y="26" width="8" height="10" rx="2" />
-            <rect class="mouth" x="24" y="42" width="16" height="4" rx="2" />
-            <circle class="antenna-tip" cx="32" cy="4" r="3" />
-            <line class="antenna-stem" x1="32" y1="7" x2="32" y2="12" />
+            <path class="wing" d="M18 32 Q6 36 11 50 Q21 47 23 36 Z" />
+            <path class="body" d="M32 6 C18 6 10 20 10 34 C10 49 19 60 32 60 C45 60 54 49 54 34 C54 20 46 6 32 6 Z" />
+            <path class="crest" d="M27 6 L22 -3 L33 1 Z" />
+            <path class="beak" d="M50 30 L61 34 L50 39 Z" />
+            <circle class="eye" cx="39" cy="26" r="4.2" />
             <g class="think-dots">
-              <circle cx="46" cy="6" r="2" />
-              <circle cx="52" cy="0" r="2" />
-              <circle cx="58" cy="-6" r="2" />
+              <circle cx="48" cy="4" r="2" />
+              <circle cx="55" cy="-2" r="2" />
+              <circle cx="61" cy="-9" r="2" />
             </g>
           </g>
         </svg>
@@ -29,12 +28,13 @@
       <span id="mascot-label">idle</span>
     </div>
 
-    <h1>Aloud</h1>
+    <h1>Pico</h1>
     <span id="status">connecting&hellip;</span>
 
     <div id="header-actions">
       <span id="voice-mode" title="Which voice backend is active"></span>
       <button id="voice-toggle" type="button">&#128264; enable voice</button>
+      <button id="stop-talking" type="button" title="Cancel the current line without turning voice off" disabled>&#9209; stop talking</button>
       <button id="settings-toggle" type="button" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
   </header>

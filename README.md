@@ -1,4 +1,4 @@
-# Aloud
+# Pico
 
 **Hear your Claude Code agent think, out loud, live, as it works.**
 
@@ -9,16 +9,16 @@ A local, always-on window into what Claude Code is actually doing right now: wha
 
 ## Why
 
-Claude Code already streams everything it does into the chat pane. But that view disappears the moment you switch windows, and there's no ambient way to glance at several active sessions at once, let alone hear it while you're looking elsewhere. Aloud is a second, always-visible surface for that same activity: pin it on a second monitor, or run it as a real desktop app, and know what's happening without keeping the chat pane in focus.
+Claude Code already streams everything it does into the chat pane. But that view disappears the moment you switch windows, and there's no ambient way to glance at several active sessions at once, let alone hear it while you're looking elsewhere. Pico is a second, always-visible surface for that same activity: pin it on a second monitor, or run it as a real desktop app, and know what's happening without keeping the chat pane in focus.
 
 ## Quick start
 
-**Desktop app (Windows):** grab the latest release, unzip, run `Aloud.exe`. See [Releases](../../releases). Windows will show a SmartScreen warning on first launch (unsigned build, see below), click through it.
+**Desktop app (Windows):** grab the latest release, unzip, run `Pico.exe`. See [Releases](../../releases). Windows will show a SmartScreen warning on first launch (unsigned build, see below), click through it.
 
 **From source (any OS with Node):**
 ```
-git clone https://github.com/mrktchris/aloud.git
-cd aloud
+git clone https://github.com/mrktchris/pico.git
+cd pico
 npm start
 ```
 Then open http://localhost:4317.
@@ -59,8 +59,8 @@ Two real API calls happen per spoken line when the rewrite step is on (a short c
 
 **Mac:** not pre-built, buildable yourself from source:
 ```
-git clone https://github.com/mrktchris/aloud.git
-cd aloud
+git clone https://github.com/mrktchris/pico.git
+cd pico
 npm install
 npm run electron        # test it first, dev mode
 npx electron-builder --mac --publish never

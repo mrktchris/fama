@@ -35,17 +35,27 @@ const { FileTailer } = require('./lib/tail');
 // extract it, and a plain <form> POST (the classic no-JS CSRF vector) can't
 // set a custom header at all. Found missing entirely by external review:
 // a malicious webpage could otherwise trigger real, billable /speak calls
-// against a visitor's local Aloud instance just by POSTing to it.
+// against a visitor's local Pico instance just by POSTing to it.
 const AUTH_TOKEN = crypto.randomBytes(24).toString('hex');
 function requireAuth(req, res) {
-  if (req.headers['x-aloud-token'] === AUTH_TOKEN) return true;
+  if (req.headers['x-pico-token'] === AUTH_TOKEN) return true;
   res.writeHead(403, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'missing or invalid token' }));
   return false;
 }
 const { eventsFromRecord } = require('./lib/parse');
 
-const ENV_PATH = path.join(__dirname, '.env');
+// Root cause of a real, serious incident: writeDotEnv() used to always write
+// next to server.js. That's correct for a source checkout, but for a
+// PACKAGED desktop app that path is inside the app's own read-only resources
+// folder, which then means every Settings save writes a live API key
+// straight into a directory that gets zipped/uploaded/reinstalled with the
+// app itself. That's exactly how a real key ended up inside a public GitHub
+// release asset. desktop/main.js now passes PICO_ENV_PATH pointing at
+// Electron's actual per-user data directory when running packaged; this only
+// falls back to sitting next to server.js for the plain `npm start` /
+// source-checkout case, where that's the correct, expected place for it.
+const ENV_PATH = process.env.PICO_ENV_PATH || path.join(__dirname, '.env');
 
 // --- tiny .env loader/writer, no dependency needed for something this small ---
 function loadDotEnv() {
@@ -298,6 +308,7 @@ async function rewriteForSpeech(text, kind) {
             personaLine +
             `HARD LIMIT: ${preset.words} words maximum, count them as you write and stop at the limit even mid-thought. ` +
             'Present tense, natural spoken sentences. ' +
+            'Never start with a filler opener like "So", "Well", "Okay so", "Now", or "Alright", get straight into the actual content. ' +
             'No code, no file paths, no markdown, no meta-commentary about what you are doing right now, just the plain-language gist of it. ' +
             'Reply with only the rewritten line and nothing else.',
         },
@@ -537,8 +548,13 @@ const server = http.createServer((req, res) => {
           });
           res.end(audio);
         } catch (err) {
+          // Found by audit: OpenAI's own error text can embed a masked
+          // fragment of the key that was sent (e.g. on an invalid/revoked
+          // key). That's fine to log locally, not fine to echo back over
+          // the HTTP response, which is visible to devtools/Network tab.
+          console.error(`[speak] failed: ${String((err && err.message) || err).slice(0, 300)}`);
           res.writeHead(502, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: String((err && err.message) || err).slice(0, 300) }));
+          res.end(JSON.stringify({ error: 'speech synthesis failed, see server log for detail' }));
         }
       })
       .catch(() => {
@@ -567,12 +583,20 @@ const server = http.createServer((req, res) => {
     // a cross-origin fetch can't read this response body to extract it.
     if (path.basename(filePath) === 'index.html') {
       data = Buffer.from(
-        data.toString('utf8').replace('</head>', `<script>window.__ALOUD_TOKEN__=${JSON.stringify(AUTH_TOKEN)};</script></head>`)
+        data.toString('utf8').replace('</head>', `<script>window.__PICO_TOKEN__=${JSON.stringify(AUTH_TOKEN)};</script></head>`)
       );
     }
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
     res.end(data);
   });
+});
+
+// Found by audit: an http.Server with no 'error' listener throws unhandled on
+// EADDRINUSE (port already taken, e.g. a second instance), which killed this
+// process silently with no console attached in the packaged app, invisible.
+server.on('error', (err) => {
+  console.error(`[server] failed to start: ${err.message}`);
+  process.exitCode = 1;
 });
 
 // Bind to loopback only. This feed includes file paths, thinking, and tool

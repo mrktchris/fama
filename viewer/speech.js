@@ -24,7 +24,7 @@
     try {
       fetch('/client-error', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Pico-Token': window.__PICO_TOKEN__ || '' },
         body: JSON.stringify({ message }),
       }).catch(() => {});
     } catch {
@@ -145,7 +145,7 @@
       const isStale = () => generation !== this._generation;
       return fetch('/speak', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Pico-Token': window.__PICO_TOKEN__ || '' },
         body: JSON.stringify({ text, kind, speed: this.rate }),
         signal: this._controller.signal,
       })

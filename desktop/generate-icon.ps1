@@ -6,6 +6,9 @@
 Add-Type -AssemblyName System.Drawing
 
 function New-MascotBitmap([int]$size) {
+  # Chirp's mascot: a small round bird, matching viewer/index.html's SVG so the
+  # app icon and the in-app mascot are visibly the same character, not two
+  # unrelated logos.
   $bmp = New-Object System.Drawing.Bitmap($size, $size)
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
@@ -15,32 +18,34 @@ function New-MascotBitmap([int]$size) {
   $panel = [System.Drawing.Color]::FromArgb(255, 0x17, 0x17, 0x1b)
   $border = [System.Drawing.Color]::FromArgb(255, 0x35, 0x35, 0x3c)
   $accent = [System.Drawing.Color]::FromArgb(255, 0x7a, 0xa2, 0xff)
+  $tool = [System.Drawing.Color]::FromArgb(255, 0xff, 0xb4, 0x54)
   $eyeColor = [System.Drawing.Color]::FromArgb(255, 0xed, 0xed, 0xf0)
 
-  # rounded body
-  $bodyRect = New-Object System.Drawing.RectangleF (8 * $s), (10 * $s), (48 * $s), (44 * $s)
-  $path = New-Object System.Drawing.Drawing2D.GraphicsPath
-  $r = 12 * $s
-  $path.AddArc($bodyRect.X, $bodyRect.Y, $r * 2, $r * 2, 180, 90)
-  $path.AddArc($bodyRect.Right - $r * 2, $bodyRect.Y, $r * 2, $r * 2, 270, 90)
-  $path.AddArc($bodyRect.Right - $r * 2, $bodyRect.Bottom - $r * 2, $r * 2, $r * 2, 0, 90)
-  $path.AddArc($bodyRect.X, $bodyRect.Bottom - $r * 2, $r * 2, $r * 2, 90, 90)
-  $path.CloseFigure()
-  $g.FillPath((New-Object System.Drawing.SolidBrush($panel)), $path)
-  $g.DrawPath((New-Object System.Drawing.Pen($border, [Math]::Max(1, 2 * $s))), $path)
+  function Pt([double]$x, [double]$y) {
+    return New-Object System.Drawing.PointF(($x * $s), ($y * $s))
+  }
 
-  # eyes
-  $eyeBrush = New-Object System.Drawing.SolidBrush($eyeColor)
-  $g.FillRectangle($eyeBrush, (20 * $s), (26 * $s), (8 * $s), (10 * $s))
-  $g.FillRectangle($eyeBrush, (36 * $s), (26 * $s), (8 * $s), (10 * $s))
+  # wing, drawn first so the body overlaps its base
+  $wing = [System.Drawing.PointF[]]@((Pt 18 32), (Pt 6 36), (Pt 11 50), (Pt 21 47), (Pt 23 36))
+  $g.FillPolygon((New-Object System.Drawing.SolidBrush($panel)), $wing)
+  $g.DrawPolygon((New-Object System.Drawing.Pen($border, [Math]::Max(1, 1.5 * $s))), $wing)
 
-  # mouth
-  $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 0x8a, 0x8a, 0x92))), (24 * $s), (42 * $s), (16 * $s), (4 * $s))
+  # body: a soft rounded blob approximated with a filled ellipse, simplest
+  # reliable way to get this shape out of System.Drawing without a full bezier path
+  $bodyRect = New-Object System.Drawing.RectangleF (10 * $s), (6 * $s), (44 * $s), (54 * $s)
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush($panel)), $bodyRect)
+  $g.DrawEllipse((New-Object System.Drawing.Pen($border, [Math]::Max(1, 2 * $s))), $bodyRect)
 
-  # antenna
-  $pen = New-Object System.Drawing.Pen($border, [Math]::Max(1, 2 * $s))
-  $g.DrawLine($pen, (32 * $s), (7 * $s), (32 * $s), (12 * $s))
-  $g.FillEllipse((New-Object System.Drawing.SolidBrush($accent)), (29 * $s), (1 * $s), (6 * $s), (6 * $s))
+  # crest
+  $crest = [System.Drawing.PointF[]]@((Pt 27 6), (Pt 22 -3), (Pt 33 1))
+  $g.FillPolygon((New-Object System.Drawing.SolidBrush($accent)), $crest)
+
+  # beak
+  $beak = [System.Drawing.PointF[]]@((Pt 50 30), (Pt 61 34), (Pt 50 39))
+  $g.FillPolygon((New-Object System.Drawing.SolidBrush($tool)), $beak)
+
+  # eye
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush($eyeColor)), (34.8 * $s), (21.8 * $s), (8.4 * $s), (8.4 * $s))
 
   $g.Dispose()
   return $bmp

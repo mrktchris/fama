@@ -102,7 +102,7 @@
 
   usageResetBtn.addEventListener('click', () => {
     if (!confirm('Reset the usage counter to $0.00? This only zeroes the local tracker, it has no effect on your actual OpenAI billing.')) return;
-    fetch('/usage/reset', { method: 'POST', headers: { 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' } }).then(refreshUsage);
+    fetch('/usage/reset', { method: 'POST', headers: { 'X-Pico-Token': window.__PICO_TOKEN__ || '' } }).then(refreshUsage);
   });
 
   function open() {
@@ -169,7 +169,7 @@
     );
     return fetch('/settings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Aloud-Token': window.__ALOUD_TOKEN__ || '' },
+      headers: { 'Content-Type': 'application/json', 'X-Pico-Token': window.__PICO_TOKEN__ || '' },
       body: JSON.stringify(body),
     })
       .then((r) => r.json())
@@ -200,11 +200,17 @@
   });
 
   testBtn.addEventListener('click', () => {
+    // Found by audit: this used to test whatever was last SAVED, not what's
+    // currently typed in the form, a control that silently contradicted its
+    // own label. Now it saves first (same as clicking Save) so what you hear
+    // always matches what's on screen when you click it.
     if (!window.narrator.enabled) window.narrator.enable();
     const sample =
       "So I'm thinking about whether to use approach A or approach B here, and honestly A seems cleaner " +
       'since it avoids the extra dependency, but let me actually double check that before committing to it.';
-    window.narrator.say(sample, 'thinking');
-    setTimeout(refreshUsage, 3000); // rough guess at when the call has actually landed
+    saveSettings().then(() => {
+      window.narrator.say(sample, 'thinking');
+      setTimeout(refreshUsage, 3000); // rough guess at when the call has actually landed
+    });
   });
 })();

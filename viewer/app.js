@@ -20,11 +20,21 @@ const narrator = new Narrator();
 window.narrator = narrator; // settings.js drives it directly (test button, refresh after save)
 
 let mostRecentSessionId = null;
+let pinnedSessionId = null; // manual override, click a lane's speaker icon to set this
 let speakingLaneEl = null;
+
+// The session that actually gets to speak: a manual pin always wins over
+// auto-follow, so picking a lane sticks until you pick a different one or
+// explicitly release it, rather than getting yanked back the instant some
+// other session does anything.
+function focusSessionId() {
+  return pinnedSessionId || mostRecentSessionId;
+}
 
 const speakThinkingEl = document.getElementById('speak-thinking');
 const speakToolsEl = document.getElementById('speak-tools');
 const voiceToggleEl = document.getElementById('voice-toggle');
+const stopTalkingEl = document.getElementById('stop-talking');
 const voiceModeEl = document.getElementById('voice-mode');
 const voiceSelectEl = document.getElementById('voice-select');
 const voiceRateEl = document.getElementById('voice-rate');
@@ -54,18 +64,24 @@ speakToolsEl.addEventListener('change', () => savePrefs({ speakTools: speakTools
 
 narrator.onStateChange = (isSpeaking) => {
   window.mascot.setSpeaking(isSpeaking);
+  stopTalkingEl.disabled = !isSpeaking;
   if (speakingLaneEl) {
     speakingLaneEl.classList.remove('lane-speaking');
     speakingLaneEl = null;
   }
   if (isSpeaking) {
-    const lane = lanes.get(mostRecentSessionId || 'unknown');
+    const lane = lanes.get(focusSessionId() || 'unknown');
     if (lane) {
       lane.el.classList.add('lane-speaking');
       speakingLaneEl = lane.el;
     }
   }
 };
+
+// Cancels only the current/queued line(s), voice stays enabled and keeps
+// narrating whatever comes next, this is deliberately not the same as the
+// enable/disable toggle.
+stopTalkingEl.addEventListener('click', () => narrator.stop());
 
 function refreshVoiceButton() {
   voiceToggleEl.textContent = narrator.enabled ? '🔊 voice on' : '🔈 enable voice';
@@ -145,14 +161,32 @@ function laneFor(sessionId) {
 
   const el = document.createElement('section');
   el.className = 'lane';
-  el.innerHTML =
-    '<div class="lane-header"><span class="lane-live-dot"></span>' +
-    '<span class="lane-title" title="session ' + key + '">session ' + key.slice(0, 12) + '</span>' +
-    '<span class="lane-current-badge">following</span></div>' +
-    '<div class="lane-feed"></div>';
+  // Built with createElement/textContent, not innerHTML, sessionId is server
+  // data (a Claude-assigned UUID today, but nothing enforces that shape
+  // structurally), every other render path in this file already avoids
+  // innerHTML for exactly that reason, this was the one exception.
+  el.innerHTML = '<div class="lane-header"><span class="lane-live-dot"></span></div><div class="lane-feed"></div>';
+  const header = el.querySelector('.lane-header');
+  const titleEl = document.createElement('span');
+  titleEl.className = 'lane-title';
+  titleEl.title = 'session ' + key;
+  titleEl.textContent = 'session ' + key.slice(0, 12);
+  const badgeEl = document.createElement('span');
+  badgeEl.className = 'lane-current-badge';
+  badgeEl.textContent = 'following';
+  const pinBtn = document.createElement('button');
+  pinBtn.type = 'button';
+  pinBtn.className = 'lane-pin';
+  pinBtn.title = 'Listen to this session, overriding auto-follow';
+  pinBtn.textContent = '🔊';
+  pinBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // don't also toggle collapse
+    pinnedSessionId = pinnedSessionId === key ? null : key;
+    markCurrentLane();
+  });
+  header.append(pinBtn, titleEl, badgeEl);
   lanesEl.prepend(el);
 
-  const header = el.querySelector('.lane-header');
   header.title = 'Click to collapse this session';
   header.addEventListener('click', () => el.classList.toggle('collapsed'));
 
@@ -173,9 +207,20 @@ function laneFor(sessionId) {
 // this tool has no way to know which Claude Code window has your focus, only
 // which one is actually doing something right now.
 function markCurrentLane() {
-  for (const l of lanes.values()) l.el.classList.remove('is-current');
-  const current = lanes.get(mostRecentSessionId || 'unknown');
-  if (current) current.el.classList.add('is-current');
+  for (const l of lanes.values()) {
+    l.el.classList.remove('is-current', 'is-pinned');
+    const badge = l.el.querySelector('.lane-current-badge');
+    if (badge) badge.textContent = 'following';
+  }
+  const current = lanes.get(focusSessionId() || 'unknown');
+  if (current) {
+    current.el.classList.add('is-current');
+    if (pinnedSessionId) {
+      current.el.classList.add('is-pinned');
+      const badge = current.el.querySelector('.lane-current-badge');
+      if (badge) badge.textContent = 'pinned';
+    }
+  }
 }
 
 function addRow(lane, evt) {
@@ -207,9 +252,10 @@ function addRow(lane, evt) {
 // --- voice + mascot dispatch ------------------------------------------
 
 function handleVoiceAndMascot(evt) {
-  // Only the most recently active session gets to speak. Overlapping robot
-  // voices from several sessions at once is worse than picking wrong.
-  const isFocused = evt.sessionId === mostRecentSessionId;
+  // Only one session gets to speak: whichever's pinned, or the most recently
+  // active one if nothing's pinned. Overlapping robot voices from several
+  // sessions at once is worse than picking wrong.
+  const isFocused = evt.sessionId === focusSessionId();
 
   if (evt.kind === 'thinking') {
     window.mascot.pulseThinking();
@@ -255,7 +301,7 @@ source.onmessage = (e) => {
   const lane = laneFor(evt.sessionId);
   if (evt.sessionId && evt.sessionId !== mostRecentSessionId) {
     mostRecentSessionId = evt.sessionId;
-    markCurrentLane();
+    if (!pinnedSessionId) markCurrentLane(); // pinned means this activity doesn't change who's speaking
   }
   addRow(lane, evt);
   handleVoiceAndMascot(evt);
