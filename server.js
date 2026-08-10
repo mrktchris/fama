@@ -158,23 +158,32 @@ function clampSpeed(speed) {
 }
 
 const envFile = loadDotEnv();
-// Real environment variables win over .env, same convention as every other
-// dotenv-style tool, useful if key management ever moves to the OS/process
-// level instead of this local file.
+// Found live, a real bug: this used to prefer a real environment variable
+// over .env (the usual dotenv convention). On this machine a stale, already-
+// invalid OPENAI_API_KEY had been set at the Windows *user* environment
+// level months earlier (from an even older pre-Pico naming pass), and it
+// silently shadowed a genuinely valid key correctly saved through Settings,
+// on every single launch, with zero indication why the "correctly configured"
+// key kept failing. The whole point of the Settings panel is that Save
+// actually takes effect; a forgotten, unrelated OS-level env var silently
+// overriding it is a worse failure mode than losing a niche CLI-override
+// convenience. .env (what Settings actually writes) wins now; a real
+// environment variable is only used as a fallback when no .env value exists
+// at all yet, e.g. a genuine first-run CLI/CI scenario.
 let ttsConfig = {
-  apiKey: process.env.OPENAI_API_KEY || envFile.OPENAI_API_KEY || '',
-  model: process.env.OPENAI_TTS_MODEL || envFile.OPENAI_TTS_MODEL || 'tts-1-hd',
-  voice: process.env.OPENAI_TTS_VOICE || envFile.OPENAI_TTS_VOICE || 'alloy',
-  rewriteModel: process.env.OPENAI_REWRITE_MODEL || envFile.OPENAI_REWRITE_MODEL || 'gpt-4o-mini',
-  rewrite: envBool(process.env.OPENAI_NARRATE_REWRITE || envFile.OPENAI_NARRATE_REWRITE, true),
-  narrationSeconds: clampNarrationSeconds(process.env.OPENAI_NARRATION_SECONDS || envFile.OPENAI_NARRATION_SECONDS || 10),
+  apiKey: envFile.OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
+  model: envFile.OPENAI_TTS_MODEL || process.env.OPENAI_TTS_MODEL || 'tts-1-hd',
+  voice: envFile.OPENAI_TTS_VOICE || process.env.OPENAI_TTS_VOICE || 'alloy',
+  rewriteModel: envFile.OPENAI_REWRITE_MODEL || process.env.OPENAI_REWRITE_MODEL || 'gpt-4o-mini',
+  rewrite: envBool(envFile.OPENAI_NARRATE_REWRITE || process.env.OPENAI_NARRATE_REWRITE, true),
+  narrationSeconds: clampNarrationSeconds(envFile.OPENAI_NARRATION_SECONDS || process.env.OPENAI_NARRATION_SECONDS || 10),
   // Free text, both optional and both blank by default. persona shapes the
   // rewrite step's system prompt (works with any TTS model). voiceStyle is
   // passed as OpenAI's "instructions" param, which only gpt-4o-mini-tts
   // actually supports, tts-1/tts-1-hd silently ignore it if sent, so it's
   // only sent when that model is selected, see synthesizeSpeech below.
-  narrationPersona: process.env.OPENAI_NARRATION_PERSONA || envFile.OPENAI_NARRATION_PERSONA || '',
-  voiceStyle: process.env.OPENAI_VOICE_STYLE || envFile.OPENAI_VOICE_STYLE || '',
+  narrationPersona: envFile.OPENAI_NARRATION_PERSONA || process.env.OPENAI_NARRATION_PERSONA || '',
+  voiceStyle: envFile.OPENAI_VOICE_STYLE || process.env.OPENAI_VOICE_STYLE || '',
 };
 
 // --- usage / spend tracking, local only, persisted to usage.json (gitignored) ---
