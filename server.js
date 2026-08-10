@@ -53,6 +53,7 @@ function requireAuth(req, res) {
   return false;
 }
 const { eventsFromRecord } = require('./lib/parse');
+const { encodeProjectDir, claudeProjectsRoot } = require('./lib/paths');
 
 // Root cause of a real, serious incident: writeDotEnv() used to always write
 // next to server.js. That's correct for a source checkout, but for a
@@ -243,22 +244,6 @@ const ACTIVE_WINDOW_MS = 15 * 60 * 1000; // a session file counts as "active" if
 const POLL_MS = 250; // how often we check transcripts for new lines, kept tight on purpose, see README
 const BACKLOG_SIZE = 300;
 const MAX_SPEECH_CHARS = 900; // hard backstop, comfortably above even the 20s preset's typical output
-
-function encodeProjectDir(cwd) {
-  // Mirrors Claude Code's own project-folder naming. Windows: "C:\Users\User\Documents\Claude"
-  // becomes "C--Users-User-Documents-Claude" (verified against real files on this machine).
-  // macOS/Linux: "/Users/name/project" becomes "-Users-name-project" (every "/" -> "-",
-  // including the leading one). This half of it is implemented from Claude Code's known
-  // encoding scheme, not verified against a real Mac/Linux machine in this environment,
-  // README calls that out rather than claiming full cross-platform parity untested.
-  if (/^[A-Za-z]:\\/.test(cwd)) return cwd.replace(/^([A-Za-z]):\\/, '$1--').replace(/\\/g, '-');
-  return cwd.replace(/\//g, '-');
-}
-
-function claudeProjectsRoot() {
-  const home = process.env.USERPROFILE || process.env.HOME;
-  return path.join(home, '.claude', 'projects');
-}
 
 function resolveWatchDir() {
   if (process.env.CLAUDE_NARRATOR_DIR) return process.env.CLAUDE_NARRATOR_DIR;

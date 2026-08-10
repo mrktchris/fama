@@ -16,7 +16,8 @@
     "dist:linux-packager": "electron-packager . fama --platform=linux --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.png --prune=true --asar=false --ignore=\"^/\\.env$\" --ignore=\"^/\\.env\\.local$\" --ignore=\"^/\\.env\\.production$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/docs\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
     "postdist:linux-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js && node desktop/verify-package.js",
     "verify-package": "node desktop/verify-package.js",
-    "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1"
+    "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1",
+    "test": "node --test test/*.test.js"
   },
   "license": "MIT",
   "engines": {

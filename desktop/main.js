@@ -234,19 +234,12 @@ function applyLoginItemSetting(openAtLogin) {
   }
 }
 
-// Mirrors server.js's own encoding, kept in sync deliberately rather than
-// imported, this file has to survive being bundled independently of it.
-function encodeProjectDir(cwd) {
-  // Mirrors server.js's own encodeProjectDir, kept in sync deliberately rather
-  // than imported, see that copy's comment for the Windows-vs-Unix scheme.
-  if (/^[A-Za-z]:\\/.test(cwd)) return cwd.replace(/^([A-Za-z]):\\/, '$1--').replace(/\\/g, '-');
-  return cwd.replace(/\//g, '-');
-}
-
-function claudeProjectsRoot() {
-  const home = process.env.USERPROFILE || process.env.HOME;
-  return path.join(home, '.claude', 'projects');
-}
+// Was two hand-copied implementations (this file and server.js each had
+// their own), real drift risk with zero tests to catch it, now one shared,
+// tested module. Both files ship together in every build regardless
+// (electron-packager copies the whole project), so nothing was ever gained
+// by keeping them independent.
+const { encodeProjectDir, claudeProjectsRoot } = require(path.join(ROOT, 'lib', 'paths'));
 
 // Reads a project folder's real path from inside its own transcript data
 // (the "cwd" field every record already carries) rather than trying to
