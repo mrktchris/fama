@@ -34,9 +34,10 @@
 
     <div id="voice-panel">
       <button id="voice-toggle" type="button">&#128264; enable voice</button>
+      <span id="voice-mode" title="Which voice backend is active"></span>
       <label><input type="checkbox" id="speak-thinking" checked><span>thinking</span></label>
       <label><input type="checkbox" id="speak-tools"><span>tools</span></label>
-      <select id="voice-select" title="Voice"></select>
+      <select id="voice-select" title="Fallback / free voice"></select>
       <input type="range" id="voice-rate" min="0.6" max="1.6" step="0.1" value="1" title="Speech rate">
     </div>
   </header>

@@ -143,6 +143,20 @@ header h1 {
   box-shadow: 0 0 0 1px var(--accent-glow), 0 0 16px -4px var(--accent-glow);
 }
 
+#voice-mode {
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+#voice-mode.cloud {
+  color: var(--accent);
+  border-color: var(--accent-glow);
+  background: rgba(122, 162, 255, 0.08);
+}
+
 #voice-select, #voice-rate { accent-color: var(--accent); }
 #voice-select {
   background: var(--panel);

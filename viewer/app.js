@@ -48,6 +48,15 @@ function refreshVoiceButton() {
   voiceToggleEl.classList.toggle('active', narrator.enabled);
 }
 
+const voiceModeEl = document.getElementById('voice-mode');
+narrator.ready.then(({ cloud, model }) => {
+  voiceModeEl.textContent = cloud ? `OpenAI · ${model}` : 'free (Windows voice)';
+  voiceModeEl.classList.toggle('cloud', cloud);
+  voiceModeEl.title = cloud
+    ? `Using OpenAI text-to-speech (${model}), server-side, costs a small amount per line`
+    : 'No OPENAI_API_KEY configured, using your browser/OS built-in voice, completely free';
+});
+
 voiceToggleEl.addEventListener('click', () => {
   if (!narrator.supported) {
     voiceToggleEl.textContent = 'speech not supported here';

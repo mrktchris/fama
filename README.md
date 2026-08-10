@@ -22,6 +22,20 @@ By default it speaks the narrated text (`text` blocks) and current thinking (`th
 
 Thinking is spoken opportunistically, not queued: if you're mid-thought faster than the voice can keep up, it speaks whatever's current and skips the backlog rather than reading three-minute-old reasoning while you're already five steps further along.
 
+### Better voice (optional, costs money)
+
+The free browser voice is Windows' built-in SAPI voices, which sound robotic. Two upgrades, cheapest first:
+
+1. **Open it in Edge instead of Chrome.** Edge exposes Windows' free neural "Natural" voices through the same API, Chrome doesn't. If Windows hasn't downloaded any yet: Settings → Time & Language → Speech → Manage voices → Add voices. Zero cost either way.
+2. **OpenAI text-to-speech**, wired in server-side:
+   - Copy `.env.example` to `.env`, set `OPENAI_API_KEY=sk-...`, restart the server.
+   - Defaults to `tts-1-hd` at $30 / 1M characters, override with `OPENAI_TTS_MODEL=tts-1` in `.env` for the cheaper $15 / 1M tier if HD quality isn't worth 2x. Voice defaults to `alloy`, override with `OPENAI_TTS_VOICE`.
+   - The math: narrated lines are capped around 200 to 280 characters, so each spoken line costs roughly $0.005 to $0.008 on `tts-1-hd` (half that on `tts-1`). A heavy multi-hour session with a few hundred spoken lines lands under $2.
+   - If the API call fails for any reason (no credits, bad key, rate limit, network blip), that one line silently falls back to the free local voice instead of going dead. You'll never get silence, worst case you get the robotic voice back for a line or two.
+   - The voice-mode badge next to the enable button shows which one is actually active right now.
+
+Your `.env` file is already gitignored, the real key never gets committed regardless of how careful you are about it otherwise.
+
 ### About the sprites
 
 The original ask was to pull sprites from craftpix.net. Most of that marketplace's packs aren't licensed for redistribution in a public repo, and some are paid, so instead of embedding someone else's licensed art in a repo with your name on it, the mascot is original: plain SVG shapes animated with CSS, no image files, no license to track, loads instantly. If you own a craftpix (or any) sprite sheet you want in its place, drop the PNG in `viewer/assets/` and swap the `<svg>` block in `viewer/index.html` for an `<img>` using the same `idle` / `thinking` / `speaking` / `tool` classes, the animation state machine in `mascot.js` doesn't care what's rendering inside it.
