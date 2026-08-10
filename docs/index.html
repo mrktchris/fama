@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aloud — hear your Claude Code agent think, live</title>
+<meta name="description" content="A local, always-on dashboard and voice for Claude Code. Hear your agent think, out loud, live, as it works.">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0c; --panel: #131316; --panel-2: #17171b; --border: #232328; --border-soft: #1c1c20;
+    --text: #ededf0; --muted: #8a8a92; --muted-2: #55555e;
+    --accent: #7aa2ff; --accent-glow: rgba(122,162,255,.35);
+    --thinking: #b39dff; --tool: #ffb454; --result: #4fd18b;
+    --sans: "Segoe UI", "Inter", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: radial-gradient(circle at 50% -10%, #17171d 0%, var(--bg) 55%) fixed;
+    color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; line-height: 1.6;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); }
+
+  header.hero { padding: 100px 0 70px; text-align: center; border-bottom: 1px solid var(--border-soft); }
+  .mascot-badge {
+    width: 64px; height: 64px; margin: 0 auto 24px; border-radius: 50%;
+    background: radial-gradient(circle at 38% 30%, #1d1d24, #101013 75%);
+    box-shadow: 0 0 0 1px var(--border), 0 0 30px -6px var(--accent-glow);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .kicker { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 14px; }
+  h1 { font-size: clamp(32px, 6vw, 52px); margin: 0 0 16px; font-weight: 800; letter-spacing: -0.02em; }
+  .tagline { font-size: 18px; color: var(--muted); max-width: 560px; margin: 0 auto 36px; }
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 13px 24px; border-radius: 10px;
+    font-weight: 600; font-size: 14.5px; text-decoration: none; border: 1px solid var(--border);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--accent); color: #0a0a10; border-color: var(--accent); }
+  .btn-secondary { background: var(--panel); color: var(--text); }
+  .btn-secondary:hover { border-color: var(--muted-2); }
+  .meta-line { margin-top: 16px; font-size: 12.5px; color: var(--muted-2); }
+
+  section { padding: 60px 0; border-bottom: 1px solid var(--border-soft); }
+  section:last-of-type { border-bottom: none; }
+  h2 { font-size: 22px; margin: 0 0 28px; }
+  .shot {
+    width: 100%; border-radius: 14px; border: 1px solid var(--border); background: var(--panel);
+    box-shadow: 0 24px 60px -24px rgba(0,0,0,.6); display: block; margin: 0 0 12px;
+  }
+  .shot-caption { font-size: 12.5px; color: var(--muted-2); text-align: center; margin-bottom: 40px; }
+
+  .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
+  .feature {
+    background: linear-gradient(180deg, var(--panel) 0%, #121215 100%); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .feature h3 { font-size: 14.5px; margin: 0 0 8px; color: var(--text); }
+  .feature p { font-size: 13px; color: var(--muted); margin: 0; }
+
+  .quote-diff { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; font-family: var(--mono); font-size: 13px; }
+  .quote-diff .raw { color: var(--muted); }
+  .quote-diff .spoken { color: var(--result); margin-top: 10px; }
+  .quote-diff .tag { color: var(--muted-2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .compare-table th, .compare-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-soft); }
+  .compare-table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .compare-table td { color: var(--text); }
+  .compare-table .dim { color: var(--muted); }
+
+  footer { padding: 50px 0 80px; text-align: center; color: var(--muted-2); font-size: 13px; }
+  footer a { color: var(--muted); }
+
+  code.inline { background: var(--panel); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="mascot-badge">
+      <svg viewBox="0 0 64 64" width="28" height="28">
+        <rect x="8" y="10" width="48" height="44" rx="12" fill="#17171b" stroke="#232328" stroke-width="2"/>
+        <rect x="20" y="26" width="8" height="10" rx="2" fill="#ededf0"/>
+        <rect x="36" y="26" width="8" height="10" rx="2" fill="#ededf0"/>
+        <rect x="24" y="42" width="16" height="4" rx="2" fill="#8a8a92"/>
+        <line x1="32" y1="7" x2="32" y2="12" stroke="#232328" stroke-width="2"/>
+        <circle cx="32" cy="4" r="3" fill="#7aa2ff"/>
+      </svg>
+    </div>
+    <div class="kicker">Free &middot; open source &middot; local-first</div>
+    <h1>Hear your agent think.</h1>
+    <p class="tagline">A live dashboard and voice for Claude Code. Watch and hear what it's doing, thinking, and running, as it happens, on your own machine.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/mrktchris/aloud/releases/latest">Download for Windows</a>
+      <a class="btn btn-secondary" href="https://github.com/mrktchris/aloud">View on GitHub</a>
+    </div>
+    <div class="meta-line">MIT licensed &middot; no account, no telemetry, no required API key</div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>See it, hear it</h2>
+    <img class="shot" src="screenshot-dashboard.png" alt="Aloud dashboard showing live session lanes">
+    <p class="shot-caption">The live dashboard: one lane per active Claude Code session, updating in real time.</p>
+    <img class="shot" src="screenshot-settings.png" alt="Aloud settings panel">
+    <p class="shot-caption">Voice, persona, and accent, all configurable, with a live cost estimate as you adjust.</p>
+    <!-- Replace the two src attributes above with real screenshots in this same docs/ folder before sharing this page. -->
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What it does</h2>
+    <div class="feature-grid">
+      <div class="feature">
+        <h3>Live visual dashboard</h3>
+        <p>Text, thinking, tool calls, and results, streaming per session, with a small animated mascot that shows idle / thinking / speaking at a glance.</p>
+      </div>
+      <div class="feature">
+        <h3>Spoken narration</h3>
+        <p>Free by default (your OS voice) or a real cloud voice with a persona and accent you write yourself, not a preset dropdown.</p>
+      </div>
+      <div class="feature">
+        <h3>It rewrites, not reads</h3>
+        <p>Raw internal reasoning gets condensed into one short natural line before it's spoken, not read verbatim, word for word.</p>
+      </div>
+      <div class="feature">
+        <h3>Cost you can see</h3>
+        <p>A running dollar total for the cloud voice, right in Settings. Know what you're spending before you're surprised by it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Cleaned up, not read word for word</h2>
+    <div class="quote-diff">
+      <div class="tag">raw thinking</div>
+      <div class="raw">"So I'm thinking about whether to use approach A or approach B here, and honestly A seems cleaner since it avoids the extra dependency, but let me actually double check that assumption before committing to it because I don't want to paint myself into a corner three files from now."</div>
+      <div class="tag" style="margin-top:12px">spoken</div>
+      <div class="spoken">"I'm deciding between approach A and B, and A looks cleaner, but I need to double-check before I commit."</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>How it's different</h2>
+    <p style="color:var(--muted); font-size:13.5px; margin-top:-16px; margin-bottom:24px;">This isn't the first tool that gives Claude Code a voice, worth being upfront about that.</p>
+    <table class="compare-table">
+      <tr><th>Tool</th><th>Surface</th><th>Rewrites raw output</th><th>Persona / accent</th></tr>
+      <tr><td>AgentVibes</td><td class="dim">CLI hooks, audio only</td><td class="dim">No</td><td class="dim">Preset voices only</td></tr>
+      <tr><td>agent-tts</td><td class="dim">CLI, audio only</td><td class="dim">No</td><td class="dim">Provider voice only</td></tr>
+      <tr><td>Claude Code Narrator</td><td class="dim">CLI, local audio only</td><td class="dim">No</td><td class="dim">No</td></tr>
+      <tr><td><strong>Aloud</strong></td><td>Desktop app + visual dashboard</td><td>Yes</td><td>Free-text, your words</td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    MIT licensed. <a href="https://github.com/mrktchris/aloud">github.com/mrktchris/aloud</a>
+  </div>
+</footer>
+
+</body>
+</html>
