@@ -11,8 +11,9 @@
     "electron": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:win-dir": "electron-builder --win dir --publish never",
-    "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false",
-    "postdist:win-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js",
+    "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false --ignore=\"^/\\.env$\" --ignore=\"^/\\.env\\.local$\" --ignore=\"^/\\.env\\.production$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/docs\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\".*\\.pid$\" --ignore=\"^/tmp\"",
+    "postdist:win-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js && node desktop/verify-package.js",
+    "verify-package": "node desktop/verify-package.js",
     "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1"
   },
   "license": "MIT",

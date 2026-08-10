@@ -17,6 +17,8 @@ Claude Code already streams everything it does into the chat pane. But that view
 
 ## Quick start
 
+> **Beta.** v0.12.0 is the first release meant for anyone other than the author. Earlier builds were alpha, have been removed, and are unsupported.
+
 **Desktop app (Windows):** grab the latest release, unzip, run `Fama.exe`. See [Releases](../../releases). Windows will show a SmartScreen warning on first launch (unsigned build, see below), click through it.
 
 **From source (any OS with Node):**

@@ -27,4 +27,11 @@ Fama runs entirely on your own machine (`127.0.0.1` only, never bound to your LA
 
 ## Past incidents
 
-In the interest of not pretending this project has a spotless history: an early packaged build (v0.7.0) had a real bug where the app's own Settings panel could write a configured OpenAI API key into the installed application folder instead of per-user app data, meaning that folder (if redistributed) could carry a real credential. That release was pulled as soon as it was found, the root cause is fixed and verified (`.env` now only ever writes to the OS per-user app data directory), and every git commit in this repo's history has been checked, the key itself was never committed to source control, only ever present in that one already-removed release artifact. See `CHANGELOG.md`'s 0.9.0 entry for the technical detail.
+In the interest of not pretending this project has a spotless history: during pre-beta development, the maintainer's own OpenAI API key was packaged into alpha release artifacts twice, via two distinct root causes.
+
+1. The app wrote its `.env` into its own installed application folder instead of per-user app data, so saving Settings inside a packaged build left a credential in a distributable location. Fixed: `.env` now only ever writes to the OS per-user app data directory.
+2. Separately, the packaging tool copied a real `.env` from the project source root into the built package. `.gitignore` covers `.env`, so every git-based check reported clean and kept reporting clean — but `electron-packager` does not read `.gitignore`, and the `files` whitelist that had previously prevented this was lost when the build moved off `electron-builder`.
+
+All affected releases were deleted. No key was ever committed to source control (verified across full git history, including a pattern search of every blob in every commit); the exposure was confined to release artifacts, which are now gone.
+
+The second cause is the more instructive one, and the reason for the current build gate: a check that passes for the wrong reason is worse than no check. Packaging now runs `desktop/verify-package.js`, which fails the build outright if the packaged output contains a `.env`, a `usage.json`, a `.pid` file, or any content matching a credential pattern — independently of the `--ignore` rules that are supposed to prevent it, so that a silently-broken build flag cannot ship a secret again. Any release process for this project must run that gate before upload.
