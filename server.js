@@ -3,9 +3,9 @@
 
 /**
  * Fama
- * Local live viewer for Claude Code activity. Tails the JSONL session
- * transcripts Claude Code already writes under ~/.claude/projects/<encoded-cwd>/
- * and streams normalized events to a browser over Server-Sent Events.
+ * Local live viewer for Claude Code and Codex activity. Tails the JSONL
+ * session transcripts both agents already write on disk and streams their
+ * normalized events to a browser over Server-Sent Events.
  *
  * Voice, two layers, both optional and both degrade gracefully:
  *  - synthesis: free browser speechSynthesis, or OpenAI TTS if a key is
@@ -53,7 +53,9 @@ function requireAuth(req, res) {
   return false;
 }
 const { eventsFromRecord } = require('./lib/parse');
+const { eventsFromCodexRecord } = require('./lib/parse-codex');
 const { encodeProjectDir, claudeProjectsRoot } = require('./lib/paths');
+const { activeCodexSessions, codexSessionsRoot, findProjectForCwd } = require('./lib/codex-paths');
 
 // Root cause of a real, serious incident: writeDotEnv() used to always write
 // next to server.js. That's correct for a source checkout, but for a
@@ -251,29 +253,31 @@ function resolveWatchDir() {
   return path.join(claudeProjectsRoot(), encoded);
 }
 
-// Multiple projects at once: the desktop shell passes JSON arrays of
-// absolute dirs + friendly labels (CLAUDE_NARRATOR_DIRS / FAMA_PROJECT_LABELS,
-// see desktop/main.js). CLI mode (no Electron) still watches exactly the one
-// project it was launched from, wrapped as a one-entry array so the rest of
-// the pipeline doesn't need two code paths. Each project gets a stable id
-// (its index) used to tag every event and group lanes client-side.
+// Multiple projects at once: the desktop shell passes JSON arrays of Claude
+// transcript dirs, real project roots, and friendly labels (see
+// desktop/main.js). The real roots let global Codex sessions be matched to a
+// selected project without surfacing unrelated activity. CLI mode (no
+// Electron) watches the project it was launched from. Each project gets a
+// stable id used to tag every event and group lanes client-side.
 function resolveWatchProjects() {
   if (process.env.CLAUDE_NARRATOR_DIRS) {
-    let dirs, labels;
+    let dirs, labels, cwds;
     try {
       dirs = JSON.parse(process.env.CLAUDE_NARRATOR_DIRS);
       labels = process.env.FAMA_PROJECT_LABELS ? JSON.parse(process.env.FAMA_PROJECT_LABELS) : [];
+      cwds = process.env.FAMA_PROJECT_CWDS ? JSON.parse(process.env.FAMA_PROJECT_CWDS) : [];
     } catch {
       dirs = [];
     }
     if (Array.isArray(dirs) && dirs.length) {
-      return dirs.map((dir, i) => ({ id: String(i), dir, name: labels[i] || path.basename(dir) }));
+      return dirs.map((dir, i) => ({ id: String(i), dir, cwd: cwds[i] || null, name: labels[i] || path.basename(dir) }));
     }
   }
   // Single-project fallback: env override or the cwd-derived default.
   const dir = resolveWatchDir();
   const name = process.env.FAMA_PROJECT_LABEL || path.basename(process.cwd());
-  return [{ id: '0', dir, name }];
+  const cwd = process.env.FAMA_PROJECT_CWD || process.cwd();
+  return [{ id: '0', dir, cwd, name }];
 }
 
 const watchProjects = resolveWatchProjects();
@@ -289,17 +293,30 @@ function broadcast(event) {
   for (const res of sseClients) res.write(payload);
 }
 
-function handleNewRecords(records, project) {
+function handleClaudeRecords(records, project) {
   for (const record of records) {
     for (const event of eventsFromRecord(record)) {
-      broadcast(Object.assign(event, { projectId: project.id, projectName: project.name }));
+      broadcast(Object.assign(event, { provider: 'claude', projectId: project.id, projectName: project.name }));
     }
   }
 }
 
-function scanForActiveSessions() {
-  const now = Date.now();
-  const seenThisScan = new Set();
+function handleCodexRecords(records, project, context) {
+  for (const record of records) {
+    // Keep this defensive for transcripts discovered while their first line
+    // is still being written. Once session_meta arrives, every later event
+    // receives the same stable session id.
+    if (record && record.type === 'session_meta' && record.payload) {
+      context.sessionId = record.payload.id || record.payload.session_id || context.sessionId;
+    }
+    for (const event of eventsFromCodexRecord(record, context)) {
+      broadcast(Object.assign(event, { provider: 'codex', projectId: project.id, projectName: project.name }));
+    }
+  }
+}
+
+function scanForActiveClaudeSessions(now) {
+  const seen = new Set();
   for (const project of watchProjects) {
     let entries;
     try {
@@ -319,9 +336,9 @@ function scanForActiveSessions() {
         continue;
       }
       if (now - stat.mtimeMs > ACTIVE_WINDOW_MS) continue; // stale session, not currently active
-      seenThisScan.add(filePath);
+      seen.add(filePath);
       if (!tailers.has(filePath)) {
-        const tailer = new FileTailer(filePath, (records) => handleNewRecords(records, project));
+        const tailer = new FileTailer(filePath, (records) => handleClaudeRecords(records, project));
         // Seed at end-of-file: on startup we only stream what happens FROM NOW ON.
         // Files that already existed keep their history out of the feed on purpose,
         // this is a live narrator, not a replay tool.
@@ -330,6 +347,44 @@ function scanForActiveSessions() {
       }
     }
   }
+  return seen;
+}
+
+const CODEX_DISCOVERY_MS = 1000;
+const CODEX_SESSIONS_DIR = process.env.FAMA_CODEX_SESSIONS_DIR || codexSessionsRoot();
+let lastCodexDiscoveryAt = 0;
+let activeCodexPaths = new Set();
+
+function scanForActiveCodexSessions(now) {
+  const seen = new Set();
+  for (const session of activeCodexSessions(CODEX_SESSIONS_DIR, { now, activeWindowMs: ACTIVE_WINDOW_MS })) {
+    const project = findProjectForCwd(watchProjects, session.cwd);
+    if (!project) continue; // never surface activity from an unselected project
+    seen.add(session.filePath);
+    if (!tailers.has(session.filePath)) {
+      const context = { sessionId: session.sessionId };
+      const tailer = new FileTailer(session.filePath, (records) => handleCodexRecords(records, project, context));
+      // Same live-only rule as Claude sessions: history before Fama starts is
+      // not replayed, only bytes appended after discovery are broadcast.
+      tailer.offset = session.size;
+      tailers.set(session.filePath, tailer);
+    }
+  }
+  return seen;
+}
+
+function scanForActiveSessions() {
+  const now = Date.now();
+  const seenThisScan = scanForActiveClaudeSessions(now);
+  // Codex history is a recursive date hierarchy rather than one directory
+  // per project. Discovering files less often avoids walking that tree four
+  // times a second; once found, each FileTailer still polls at the normal
+  // 250ms cadence, so live event latency stays unchanged.
+  if (now - lastCodexDiscoveryAt >= CODEX_DISCOVERY_MS) {
+    activeCodexPaths = scanForActiveCodexSessions(now);
+    lastCodexDiscoveryAt = now;
+  }
+  for (const filePath of activeCodexPaths) seenThisScan.add(filePath);
   // Tailers used to only ever get added, never removed, so a long-running
   // process (the whole point of the tray icon) would keep statSync/open/poll
   // cycling on every session it had ever seen go active, forever. Anything

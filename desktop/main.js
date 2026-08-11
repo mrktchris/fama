@@ -6,7 +6,7 @@
  * This does NOT reimplement the server, it spawns the existing server.js as a
  * child process (same code path as `npm start`, already tested) and points a
  * small native window at it. The only new logic here is onboarding: picking
- * which Claude Code project to watch, since a double-clicked desktop app has
+ * which coding project to watch, since a double-clicked desktop app has
  * no "directory you launched it from" the way the CLI version does.
  *
  * Known limitation, v1, documented rather than hidden: this assumes Node.js
@@ -353,7 +353,8 @@ async function startServer(watchDirsEncoded) {
   // work internally as a list, one server can now watch several projects.
   const encodedList = Array.isArray(watchDirsEncoded) ? watchDirsEncoded : [watchDirsEncoded];
   const projectDirs = encodedList.map((encoded) => path.join(claudeProjectsRoot(), encoded));
-  const projectLabels = projectDirs.map((dir, i) => path.basename(realCwdFor(dir) || encodedList[i]));
+  const projectCwds = projectDirs.map((dir, i) => realCwdFor(dir) || encodedList[i]);
+  const projectLabels = projectCwds.map((cwd) => path.basename(cwd));
   serverProcess = spawn('node', [path.join(ROOT, 'server.js')], {
     // Real key ended up in a shipped release asset because the packaged app
     // wrote .env next to server.js, inside its own resources folder, by
@@ -365,6 +366,7 @@ async function startServer(watchDirsEncoded) {
       FAMA_ENV_PATH: path.join(app.getPath('userData'), '.env'),
       FAMA_USAGE_PATH: path.join(app.getPath('userData'), 'usage.json'),
       CLAUDE_NARRATOR_DIRS: JSON.stringify(projectDirs),
+      FAMA_PROJECT_CWDS: JSON.stringify(projectCwds),
       FAMA_PROJECT_LABELS: JSON.stringify(projectLabels),
     }),
     windowsHide: true,
@@ -441,14 +443,16 @@ function handleNotifyEvent(evt) {
   if (!sid) return;
   let entry = sessionActivity.get(sid);
   if (!entry) {
-    entry = { count: 0, timer: null };
+    entry = { count: 0, timer: null, provider: evt.provider || null };
     sessionActivity.set(sid, entry);
   }
+  if (evt.provider) entry.provider = evt.provider;
   entry.count += 1;
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {
     if (entry.count >= IDLE_NOTIFY_MIN_EVENTS) {
-      notify('Fama · Idle', "Claude's gone quiet after some activity.");
+      const agent = entry.provider === 'codex' ? 'Codex' : 'Claude';
+      notify('Fama · Idle', `${agent}'s gone quiet after some activity.`);
     }
     sessionActivity.delete(sid);
   }, IDLE_NOTIFY_MS);

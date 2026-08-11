@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/mrktchris/fama/actions/workflows/ci.yml/badge.svg)](https://github.com/mrktchris/fama/actions/workflows/ci.yml)
 
-**Hear your Claude Code agent think, out loud, live, as it works.**
+**See and hear Claude Code and Codex work, live, as it happens.**
 
 Fama tails a live transcript and speaks it back to you as it happens — nothing invented, nothing sent anywhere it shouldn't be.
 
-A local, always-on window into what Claude Code is actually doing right now: what it's thinking, which tool it just ran, what came back. Local-first by design: it tails the session transcript files Claude Code already writes on your own machine, no required API calls, no cloud dependency to even open it. Optional cloud voice if you want it to sound less robotic, with a persona and accent you control.
+A local, always-on window into what your coding agents are doing right now: what they're thinking when a readable summary is available, which tool just ran, and what came back. Local-first by design: it tails the session transcript files Claude Code and Codex already write on your own machine, with no required API calls and no cloud dependency just to open it. Optional cloud voice is available if you want it to sound less robotic, with a persona and accent you control.
 
 **Privacy, plainly:** local by default. The dashboard reads files already on your own disk and never phones home, no account, no telemetry, no analytics. When optional cloud voice is enabled, the text being narrated (and, if the rewrite step is on, the raw thinking/text it's condensed from) is sent to OpenAI, using your own key, billed to your own account, never Fama's. That's the only path any transcript content ever takes off your machine. Two separate, content-free network calls happen regardless of that setting: the UI loads its display font from Google Fonts, and the desktop app checks this repo's GitHub Releases on launch. Neither carries anything about you or your work. See [Voice, in detail](#voice-in-detail) below for the exact mechanics.
 
@@ -33,7 +33,7 @@ Then open http://localhost:4317. Windows is the only platform this has actually 
 
 ## What it does
 
-- **Live visual dashboard.** One lane per active Claude Code session, streaming text, thinking, tool calls, and results in real time over Server-Sent Events. A small animated mascot shows idle / thinking / speaking / running-a-tool at a glance.
+- **Live visual dashboard.** One lane per active Claude Code or Codex session, streaming text, available reasoning summaries, tool calls, and results in real time over Server-Sent Events. A small animated mascot shows idle / thinking / speaking / running-a-tool at a glance.
 - **Spoken narration**, free by default (your OS's built-in voice) or OpenAI cloud voice if you want it to sound human. Click **enable voice** once, that's the only manual step.
 - **A rewrite step**, not just reading raw text verbatim: thinking and text events get a quick pass through a cheap language model first, turning rambling internal monologue into one short, natural spoken line. Length is a 3–30 second dial with a live cost estimate, persona and voice accent are both free-text fields you control (try "a sharp CMO giving a fast executive summary," or a calm British accent).
 - **Usage tracking.** Running dollar total for the cloud voice, right in Settings, resets independently of your real OpenAI billing.
@@ -41,8 +41,8 @@ Then open http://localhost:4317. Windows is the only platform this has actually 
 
 ## How it works
 
-1. Claude Code (and Claude Desktop) write one JSONL transcript file per session under `~/.claude/projects/<encoded-project-path>/`.
-2. `server.js` watches that directory, tails new lines as they're appended (byte-offset based, it never re-reads history), and normalizes each into a small event.
+1. Claude Code writes JSONL transcripts under `~/.claude/projects/<encoded-project-path>/`; Codex writes them under `~/.codex/sessions/YYYY/MM/DD/`.
+2. `server.js` watches the selected Claude project folders and matches active Codex transcripts by their recorded working directory. It tails new lines as they're appended (byte-offset based, never replaying history) and normalizes both formats into the same small event vocabulary.
 3. Those events stream to the browser over SSE. The viewer groups them into one lane per active session.
 
 Nothing leaves the machine unless you turn on cloud voice. Be precise about what "on" means: with the rewrite step enabled (the default once cloud voice is configured), the **raw thinking/text content is sent to OpenAI first**, to be condensed, and the rewritten result is then sent again for speech synthesis. If rewriting fails for any reason, the raw text goes to speech synthesis directly instead of being dropped. Either way, it's your own key, billed to your own account, and it's exactly one line at a time, on demand, never a bulk transcript upload, but "only the narrated line" undersold it, the source text goes out too when summarizing is on.
@@ -99,7 +99,8 @@ Those are audio-only, hook- or CLI-triggered. What's different here: a standalon
 
 - [ ] **Local LLM for the rewrite step**, not just local TTS: the condense-before-speaking pass currently always calls OpenAI (`gpt-4o-mini`) when cloud voice is on. Running that rewrite through a small local model (same family of options as the TTS one below, e.g. Ollama/llama.cpp with a small instruct model) would cut both latency and the one remaining place raw thinking text leaves the machine.
 - [ ] Local neural TTS (Kokoro or Qwen-TTS) for genuinely near-zero latency, no cloud round trip
-- [ ] **Support for coding agents other than Claude Code.** The transcript format this app parses (`lib/parse.js`) is Claude Code's own JSONL shape; watching another agent (Codex CLI, OpenCode, etc.) means a parser per format behind the same event pipeline, this doesn't currently abstract that.
+- [x] **Codex transcript support.** `lib/parse-codex.js` normalizes real Codex session records into the same event vocabulary as Claude, and `server.js` tails matching active sessions as a second provider. Provider-native reasoning summaries are displayed only when Codex records expose them; opaque encrypted reasoning is never presented as readable text.
+- [ ] Support additional coding agents beyond Claude Code and Codex through the same provider-adapter pattern.
 - [ ] Proper signed Windows installer via GitHub Actions CI (also solves the Mac build without needing Mac hardware locally, and unlocks real one-click auto-install, see Known limitations above)
 - [ ] Subagent lanes, nested under their parent session
 - [ ] Detect when a session is specifically waiting on a permission decision, not just gone quiet, and say so in the notification differently
