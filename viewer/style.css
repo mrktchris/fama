@@ -471,6 +471,15 @@ main#lanes {
 .row-label { flex: 0 0 auto; white-space: nowrap; color: var(--muted); }
 .row-detail { color: var(--text); overflow-wrap: anywhere; }
 
+.row-thumb {
+  display: block;
+  max-width: 220px;
+  max-height: 140px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin: 4px 0;
+}
+
 .k-text { border-left-color: var(--border-soft); }
 .k-thinking { border-left-color: var(--thinking); }
 .k-thinking .row-label { color: var(--thinking); font-style: italic; }

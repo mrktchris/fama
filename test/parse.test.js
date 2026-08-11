@@ -80,6 +80,29 @@ test('eventsFromRecord: image block becomes an image event', () => {
   assert.equal(events[0].kind, 'image');
 });
 
+test('eventsFromRecord: base64 image block carries its actual media data through, not just a caption', () => {
+  const events = eventsFromRecord(assistantRecord([
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } },
+  ]));
+  assert.equal(events[0].kind, 'image');
+  assert.deepEqual(events[0].media, { mediaType: 'image/png', data: 'AAAA' });
+});
+
+test('eventsFromRecord: an image inside a tool_result surfaces as its own image event alongside the text result', () => {
+  const events = eventsFromRecord(userRecord([{
+    type: 'tool_result',
+    content: [
+      { type: 'text', text: 'here is the screenshot' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'BBBB' } },
+    ],
+  }]));
+  assert.equal(events.length, 2);
+  assert.equal(events[0].kind, 'result');
+  assert.equal(events[0].detail, 'here is the screenshot');
+  assert.equal(events[1].kind, 'image');
+  assert.deepEqual(events[1].media, { mediaType: 'image/png', data: 'BBBB' });
+});
+
 test('eventsFromRecord: unknown block types are ignored, not thrown on', () => {
   assert.doesNotThrow(() => eventsFromRecord(assistantRecord([{ type: 'something_new_and_unhandled' }])));
   assert.deepEqual(eventsFromRecord(assistantRecord([{ type: 'something_new_and_unhandled' }])), []);

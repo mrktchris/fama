@@ -350,7 +350,32 @@ function addRow(lane, evt) {
 
   const detail = document.createElement('span');
   detail.className = 'row-detail';
-  detail.textContent = evt.detail || '';
+
+  // Image events carry the actual picture (see lib/parse.js's media field)
+  // rather than just a "[image]" caption — render it as a real thumbnail,
+  // click to view full size, instead of unreadable placeholder text.
+  if (evt.kind === 'image' && evt.media) {
+    const src = evt.media.data
+      ? `data:${evt.media.mediaType || 'image/png'};base64,${evt.media.data}`
+      : evt.media.url;
+    if (src) {
+      const link = document.createElement('a');
+      link.href = src;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      const img = document.createElement('img');
+      img.className = 'row-thumb';
+      img.src = src;
+      img.alt = 'image';
+      img.loading = 'lazy';
+      link.appendChild(img);
+      detail.appendChild(link);
+    } else {
+      detail.textContent = evt.detail || '';
+    }
+  } else {
+    detail.textContent = evt.detail || '';
+  }
 
   row.append(label, detail);
   lane.feedEl.appendChild(row);
