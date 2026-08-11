@@ -565,11 +565,11 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   createTray();
   applyLoginItemSetting(getPrefs().launchOnStartup);
-  // watchDirEncoded (singular) is the pre-0.11.0 shape, still read here so
-  // upgrading users don't get dropped back into onboarding; currentProjects()
-  // normalizes both shapes everywhere else, but the very first read has to
-  // happen before that helper's defined below, so it's inlined here too.
-  const initialProjects = currentProjects();
+  // Preserve the canonical working directory for browsed folders: Codex
+  // discovery matches session metadata against cwd, while the older Claude
+  // selection shapes only carried an encoded transcript-directory name.
+  // RuntimeConfigStore validates canonical entries and migrates legacy ones.
+  const initialProjects = runtimeConfig.runtimeProjects({ projectDirFromEncoded, realCwdFor, encodeProjectDir });
   if (initialProjects.length) {
     await startServer(initialProjects);
     openMainWindow();
