@@ -121,12 +121,40 @@
   // Pricing comes from the Cloud Narration Module through /config. Keeping the
   // provider knowledge server-side prevents the preview and recorded usage
   // from drifting into two different estimates again.
-  const CHARS_PER_WORD = 5.5;
   let pricePerChar = {};
+  let narrationEstimate = null;
+  let modelCapabilities = new Map();
+  let styleControlModel = null;
+
+  function populateSelect(select, options, currentValue) {
+    select.replaceChildren();
+    const normalized = Array.isArray(options) ? options : [];
+    for (const item of normalized) {
+      const value = typeof item === 'string' ? item : item && item.id;
+      if (!value) continue;
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = typeof item === 'string' ? item : item.label || value;
+      select.appendChild(option);
+    }
+    if (currentValue && !normalized.some((item) => (typeof item === 'string' ? item : item && item.id) === currentValue)) {
+      const saved = document.createElement('option');
+      saved.value = currentValue;
+      saved.textContent = `${currentValue} · saved value`;
+      select.appendChild(saved);
+    }
+    select.value = currentValue || (select.options[0] && select.options[0].value) || '';
+  }
+
   function updateLengthReadout() {
     const seconds = Number(lengthSlider.value);
-    const words = Math.max(6, Math.round(seconds * 2.5));
-    const chars = Math.round(words * CHARS_PER_WORD);
+    if (!narrationEstimate) {
+      lengthReadout.textContent = `~${seconds}s`;
+      lengthCost.textContent = 'Cost estimate is loading from the local narration service.';
+      return;
+    }
+    const words = Math.max(narrationEstimate.minWords, Math.round(seconds * narrationEstimate.wordsPerSecond));
+    const chars = Math.round(words * narrationEstimate.charactersPerWord);
     lengthReadout.textContent = `~${seconds}s, ~${words} words`;
     const price = pricePerChar[modelSelect.value];
     if (!Number.isFinite(price)) {
@@ -140,10 +168,17 @@
   modelSelect.addEventListener('change', updateLengthReadout);
 
   function updateVoiceStyleSupport() {
-    const supported = modelSelect.value === 'gpt-4o-mini-tts';
-    voiceStyleSupportEl.textContent = supported ? '(recommended, supports style control)' : '(switch to gpt-4o-mini-tts to use style control)';
+    const selected = modelCapabilities.get(modelSelect.value);
+    const supported = Boolean(selected && selected.voiceStyleSupported);
+    voiceStyleSupportEl.textContent = supported
+      ? '(recommended, supports style control)'
+      : styleControlModel
+        ? `(switch to ${styleControlModel.id} to use style control)`
+        : '(style control unavailable for the current catalog)';
     voiceStyleInput.disabled = !supported;
-    voiceStyleInput.placeholder = supported ? 'e.g. natural Dominican-American English, warm and conversational' : 'switch the model above to use this';
+    voiceStyleInput.placeholder = supported
+      ? 'e.g. natural Dominican-American English, warm and conversational'
+      : 'switch the model above to use this';
   }
   modelSelect.addEventListener('change', updateVoiceStyleSupport);
 
@@ -250,9 +285,13 @@
     fetch('/config')
       .then((r) => r.json())
       .then((cfg) => {
-        modelSelect.value = cfg.model || 'gpt-4o-mini-tts';
+        const models = Array.isArray(cfg.models) ? cfg.models : [];
+        modelCapabilities = new Map(models.map((model) => [model.id, model]));
+        styleControlModel = models.find((model) => model.voiceStyleSupported) || null;
+        populateSelect(modelSelect, models, cfg.model);
         pricePerChar = cfg.pricing && cfg.pricing.estimatedTtsPerChar ? cfg.pricing.estimatedTtsPerChar : {};
-        voiceSelect.value = cfg.voice || 'alloy';
+        narrationEstimate = cfg.narrationEstimate || null;
+        populateSelect(voiceSelect, cfg.voices, cfg.voice);
         rewriteCheckbox.checked = cfg.rewrite !== false;
         lengthSlider.min = cfg.narrationMin || 3;
         lengthSlider.max = cfg.narrationMax || 30;

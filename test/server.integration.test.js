@@ -213,6 +213,10 @@ test('/config never echoes the real API key, only whether one is set', async () 
   assert.equal(typeof cfg.cloudVoice, 'boolean');
   assert.ok(!('apiKey' in cfg), '/config response must never include the raw key field');
   assert.ok(!res.body.includes('sk-'), '/config response body must never contain anything key-shaped');
+  assert.deepEqual(cfg.models.map((model) => model.id), ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd']);
+  assert.equal(cfg.models[0].voiceStyleSupported, true);
+  assert.deepEqual(cfg.voices, ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
+  assert.equal(cfg.narrationEstimate.wordsPerSecond, 2.5);
 });
 
 test('/events tags new Claude activity with its provider and selected project', async () => {

@@ -61,6 +61,10 @@ test('Cloud Narration settings sanitize persisted lines and never expose the key
   assert.equal('modelDeprecated' in config, false);
   assert.equal(config.pricing.checkedAt, '2026-08-11');
   assert.equal(config.pricing.estimatedTtsPerChar['tts-1'], 0.000015);
+  assert.deepEqual(config.models.map((model) => model.id), ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd']);
+  assert.equal(config.models.find((model) => model.id === 'gpt-4o-mini-tts').voiceStyleSupported, true);
+  assert.deepEqual(config.voices, ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
+  assert.deepEqual(config.narrationEstimate, { wordsPerSecond: 2.5, charactersPerWord: 5.5, minWords: 6 });
 });
 
 test('Cloud Narration owns the pricing estimate and rejects unsupported provider models', async (t) => {
@@ -72,6 +76,15 @@ test('Cloud Narration owns the pricing estimate and rejects unsupported provider
   cloud.updateSettings({ model: 'tts-1', rewrite: false });
   await cloud.speak({ text: 'four', kind: 'text' });
   assert.equal(cloud.usage().totalCost, 4 * 0.000015);
+});
+
+test('Cloud Narration is the browser catalog source of truth', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'viewer', 'index.html'), 'utf8');
+  const settings = fs.readFileSync(path.join(__dirname, '..', 'viewer', 'settings.js'), 'utf8');
+  assert.equal(html.includes('option value="gpt-4o-mini-tts"'), false);
+  assert.match(settings, /populateSelect\(modelSelect, models, cfg\.model\)/);
+  assert.equal(settings.includes("modelSelect.value === 'gpt-4o-mini-tts'"), false);
+  assert.equal(settings.includes('wordsPerSecond: 2.5'), false);
 });
 
 test('Cloud Narration returns a typed local fallback error when no key is configured', async (t) => {
