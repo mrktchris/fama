@@ -4,12 +4,12 @@
 [![CI](https://github.com/mrktchris/fama/actions/workflows/ci.yml/badge.svg)](https://github.com/mrktchris/fama/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/mrktchris/fama/actions/workflows/codeql.yml/badge.svg)](https://github.com/mrktchris/fama/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/github/license/mrktchris/fama)](LICENSE)
-[![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/mrktchris/fama/releases/latest)
+[![Platforms: Windows + macOS](https://img.shields.io/badge/platforms-Windows%20%2B%20macOS-0078D4)](https://github.com/mrktchris/fama/releases/latest)
 [![Build provenance: Sigstore](https://img.shields.io/badge/provenance-Sigstore-3c8dbc)](https://github.com/mrktchris/fama/attestations)
 
 **See and hear Claude Code, Codex, and opt-in agent heartbeats work, live.**
 
-Fama is a local-first Windows desktop companion for coding agents. It turns the transcript files already on your computer into an always-visible conversation and activity dashboard, with optional spoken narration.
+Fama is a local-first Windows and macOS desktop companion for coding agents. It turns the transcript files already on your computer into an always-visible conversation and activity dashboard, with optional spoken narration.
 
 ![Fama showing live Claude Code and Codex conversations](docs/screenshot-dashboard.png)
 
@@ -18,7 +18,7 @@ Fama is a local-first Windows desktop companion for coding agents. It turns the 
 - **One calm view across agents.** Follow Claude Code and Codex sessions by project and provider without keeping every task in focus.
 - **Messages or activity.** Read a clean dialogue, then switch to reasoning summaries, tool calls, results, and errors when you need technical detail.
 - **Voice when useful.** Use the free operating-system voice, or opt into OpenAI text-to-speech with your own API key, voice, persona, and accent instructions.
-- **Built for ambient use.** Keep Fama on a second monitor or in the Windows tray, pin the session you want to hear, and get bounded native idle/error notifications.
+- **Built for ambient use.** Keep Fama on a second monitor or in the Windows system tray or macOS menu bar, pin the session you want to hear, and get bounded native idle/error notifications.
 - **Local by default.** No Fama account, telemetry, analytics, or hosted application UI.
 
 ## Install
@@ -27,19 +27,21 @@ Download the [latest release](https://github.com/mrktchris/fama/releases/latest)
 
 - `Fama-Setup.exe` — Windows installer with Start Menu shortcut and uninstaller.
 - `Fama-win32-x64.zip` — portable build; extract it and run `Fama.exe`.
+- `Fama-macOS-universal.dmg` — universal Mac app for Apple Silicon and Intel; drag Fama to Applications.
+- `Fama-macOS-universal.zip` — universal Mac updater/portable archive.
 
-The binaries are not Authenticode-signed yet, so Microsoft Defender SmartScreen may warn on first launch. Fama does not claim a certificate it does not possess. Each release instead includes SHA-256 checksums, a CycloneDX SBOM, and GitHub/Sigstore-signed provenance attestations.
+The Windows binaries are not Authenticode-signed and the Mac app is not yet signed with an Apple Developer ID or notarized, so SmartScreen or Gatekeeper may warn on first launch. Fama does not claim certificates it does not possess. Each release instead includes SHA-256 checksums, a CycloneDX SBOM, and GitHub/Sigstore-signed provenance attestations. On macOS, use **Control-click → Open** for the first launch of an unsigned release you have verified.
 
 To run from source (Node.js 18+):
 
-```powershell
+```sh
 git clone https://github.com/mrktchris/fama.git
 cd fama
 npm ci
 npm start
 ```
 
-Open `http://localhost:4317`. The prebuilt app is Windows x64; macOS and Linux package paths exist for contributors but are not claimed as end-to-end supported releases.
+Open `http://localhost:4317`. Windows x64 and universal macOS packages are built from the same source tree and gated by the same tests and package-secret scan.
 
 ## Privacy, plainly
 
@@ -74,22 +76,30 @@ Compare a download with `SHA256SUMS.txt`:
 Get-FileHash .\Fama-Setup.exe -Algorithm SHA256
 ```
 
+```sh
+shasum -a 256 Fama-macOS-universal.dmg
+```
+
 With the [GitHub CLI](https://cli.github.com/) installed, verify its signed build origin:
 
 ```powershell
 gh attestation verify .\Fama-Setup.exe --repo mrktchris/fama
 ```
 
+```sh
+gh attestation verify Fama-macOS-universal.dmg --repo mrktchris/fama
+```
+
 The tagged-release workflow reruns the complete test suite, rejects high-severity dependency advisories, scans the unpacked application for credential patterns and forbidden files, generates an SBOM, creates signed attestations, and only then publishes the installer and portable bundle.
 
 ## Updates
 
-Packaged installs check GitHub Releases on launch. When an update is available, Fama asks before downloading and asks again before restarting to install. Nothing downloads or installs without user confirmation.
+Installed Windows and macOS builds check GitHub Releases on launch. When an update is available, Fama asks before downloading and asks again before restarting to install. Nothing downloads or installs without user confirmation. Both platforms are produced from one shared Electron codebase, and every pull request runs tests on Windows and macOS plus package builds before release.
 
 ## Current limitations
 
-- Prebuilt releases are Windows x64 only.
 - The Windows binaries are not yet Authenticode-signed.
+- The macOS app is not yet Developer ID-signed or notarized.
 - Subagent transcripts are not displayed as nested lanes yet.
 - Two unrelated tasks writing into the same agent project folder can appear in the same project feed; watch separate projects for strict visual separation.
 

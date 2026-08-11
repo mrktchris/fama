@@ -55,23 +55,11 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  portable-packages:
-    name: Portable package (${{ matrix.label }})
-    runs-on: ${{ matrix.os }}
+  linux-portable-package:
+    name: Portable package (Linux)
+    runs-on: ubuntu-latest
     needs: test
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            label: Linux
-            script: dist:linux-packager
-            package: dist-desktop/fama-linux-x64
-          - os: macos-latest
-            label: macOS
-            script: dist:mac-packager
-            package: dist-desktop/Fama-darwin-x64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -79,8 +67,37 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run ${{ matrix.script }}
-      - run: node desktop/verify-package.js ${{ matrix.package }}
+      - run: npm run dist:linux-packager
+      - run: node desktop/verify-package.js dist-desktop/fama-linux-x64
+
+  macos-package:
+    name: macOS universal app + DMG
+    runs-on: macos-latest
+    needs: test
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:mac
+        env:
+          # Pull requests never receive signing credentials. Build the exact
+          # universal package shape unsigned and still enforce the package
+          # secret scan; tagged releases may opt into a real Apple identity.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - run: node desktop/verify-package.js dist-desktop/mac-universal
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fama-macos-universal
+          path: |
+            dist-desktop/Fama-*-macOS-universal.dmg
+            dist-desktop/Fama-*-macOS-universal.zip
+            dist-desktop/Fama-*-macOS-universal.zip.blockmap
+            dist-desktop/latest-mac.yml
+          retention-days: 7
 
   windows-package:
     name: Windows package build + secret scan

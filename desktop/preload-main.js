@@ -8,6 +8,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 // server.js/viewer is run plain via `npm start` outside Electron. The web
 // code checks for window.famaDesktop before showing that section at all.
 contextBridge.exposeInMainWorld('famaDesktop', {
+  getPlatformInfo: () => ipcRenderer.invoke('get-platform-info'),
   getPrefs: () => ipcRenderer.invoke('get-app-prefs'),
   setPrefs: (partial) => ipcRenderer.invoke('set-app-prefs', partial),
   // Was only reachable via the system tray's "Manage watched projects…"

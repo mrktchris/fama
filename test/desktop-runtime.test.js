@@ -10,6 +10,19 @@ const { RuntimeConfigStore } = require('../desktop/runtime-config');
 const { LocalServerRuntime } = require('../desktop/local-server');
 const { createWindowPolicy, isLocalAppUrl, safeExternalUrl } = require('../desktop/window-policy');
 const { RELEASE_URL, UpdateRuntime } = require('../desktop/update-runtime');
+const { desktopPlatformInfo } = require('../desktop/platform');
+
+test('Desktop Runtime exposes platform-native labels without changing shared features', () => {
+  assert.deepEqual(desktopPlatformInfo('darwin'), {
+    id: 'darwin',
+    name: 'macOS',
+    startupLabel: 'Launch Fama when you log in',
+    voiceLabel: 'free (Mac voice)',
+    supportsDesktopShortcut: false,
+  });
+  assert.equal(desktopPlatformInfo('win32').supportsDesktopShortcut, true);
+  assert.equal(desktopPlatformInfo('linux').voiceLabel, 'free (system voice)');
+});
 
 test('Desktop Runtime config preserves unrelated state and filters renderer preferences', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fama-runtime-'));

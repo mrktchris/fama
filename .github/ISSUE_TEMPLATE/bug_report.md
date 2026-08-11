@@ -18,9 +18,9 @@ A clear description of what went wrong.
 3.
 
 **Environment**
-- Running from: [ ] packaged Windows build  [ ] source checkout (`npm start`)
+- Running from: [ ] packaged Windows build  [ ] packaged macOS build  [ ] source checkout (`npm start`)
 - Version (see the release tag, or `package.json` if from source):
-- Windows version:
+- Operating system and version:
 - Node version (if running from source): `node -v`
 
 **Relevant log output**

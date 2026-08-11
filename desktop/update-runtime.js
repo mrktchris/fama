@@ -25,7 +25,7 @@ class UpdateRuntime {
         return this._dialog.showMessageBox({
           type: 'info',
           title: 'Updates unavailable in this build',
-          message: 'Automatic updates are available in the installed Windows build. Portable and development builds can use the Releases page.',
+          message: 'Automatic updates are available in installed Windows and macOS builds. Portable and development builds can use the Releases page.',
           buttons: ['Open Releases page', 'Close'],
           defaultId: 0,
           cancelId: 1,
@@ -42,7 +42,7 @@ class UpdateRuntime {
       type: 'info',
       title: 'Update available',
       message: `Fama ${info.version} is available (you're on ${this._app.getVersion()}).`,
-      detail: 'Fama can download the verified installer now. Nothing installs until you confirm again after the download.',
+      detail: 'Fama can download the verified update package now. Nothing installs until you confirm again after the download.',
       buttons: ['Download update', 'View release', 'Not now'],
       defaultId: 0,
       cancelId: 2,

@@ -11,6 +11,7 @@ The approved ImageGen source is
 the optimized runtime derivatives:
 
 - `desktop/icon.ico` for Windows application and installer surfaces;
+- `desktop/icon.icns` for the macOS app bundle, Dock, Finder, and DMG;
 - `desktop/icon.png` for desktop/tray use;
 - `viewer/identity-signal.png` for the header, empty state, and onboarding.
 

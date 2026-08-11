@@ -13,7 +13,7 @@
  * users do not need a separate Node.js install or a trustworthy PATH entry.
  */
 
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, Notification, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, Notification, shell, nativeImage } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -25,6 +25,9 @@ const { DesktopNotifications } = require('./desktop-notifications');
 const { RuntimeConfigStore } = require('./runtime-config');
 const { createWindowPolicy, isLocalAppUrl } = require('./window-policy');
 const { UpdateRuntime } = require('./update-runtime');
+const { desktopPlatformInfo } = require('./platform');
+
+const platformInfo = desktopPlatformInfo();
 
 // Found by audit: with no single-instance lock, double-clicking the exe again
 // (very plausible, since closing the window hides it instead of quitting, and
@@ -391,7 +394,7 @@ function openMainWindow() {
       preload: path.join(__dirname, 'preload-main.js'),
     },
   });
-  mainWindow.setMenuBarVisibility(false);
+  if (process.platform !== 'darwin') mainWindow.setMenuBarVisibility(false);
   hardenWindowNavigation(mainWindow, (url) => isLocalAppUrl(url, PORT));
   // Closing the window hides it, doesn't quit, that's the whole point of the
   // tray icon: this keeps narrating in the background until you actually quit.
@@ -426,7 +429,7 @@ function openOnboardingWindow() {
       webviewTag: false,
     },
   });
-  onboardingWindow.setMenuBarVisibility(false);
+  if (process.platform !== 'darwin') onboardingWindow.setMenuBarVisibility(false);
   const onboardingPath = path.join(__dirname, 'onboarding.html');
   const onboardingUrl = pathToFileURL(onboardingPath).href;
   hardenWindowNavigation(onboardingWindow, (url) => url === onboardingUrl);
@@ -473,6 +476,10 @@ ipcMain.handle('get-app-prefs', (event) => {
   assertIpcSender(event, mainWindow);
   return getPrefs();
 });
+ipcMain.handle('get-platform-info', (event) => {
+  assertIpcSender(event, mainWindow);
+  return platformInfo;
+});
 ipcMain.handle('set-app-prefs', (event, partial) => {
   assertIpcSender(event, mainWindow);
   return setPrefs(partial || {});
@@ -517,6 +524,7 @@ function createDesktopShortcut() {
 // onboarding (tracked in config.json), and only if nothing's already there,
 // re-clicking "Change watched project" on every later run shouldn't nag.
 function offerDesktopShortcut() {
+  if (!platformInfo.supportsDesktopShortcut) return;
   if (shortcutOfferedThisRun) return;
   shortcutOfferedThisRun = true;
   if (!app.isPackaged) return;
@@ -535,22 +543,89 @@ function offerDesktopShortcut() {
 }
 
 function createTray() {
+  let trayIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
+  if (process.platform === 'darwin' && !trayIcon.isEmpty()) {
+    trayIcon = trayIcon.resize({ width: 18, height: 18 });
+    trayIcon.setTemplateImage(true);
+  }
   try {
-    tray = new Tray(path.join(__dirname, 'icon.png'));
+    tray = new Tray(trayIcon);
   } catch {
     return; // icon missing or platform quirk, tray is a nice-to-have, not load-bearing
   }
   tray.setToolTip('Fama');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
+  const trayTemplate = [
       { label: 'Show', click: () => (mainWindow ? mainWindow.show() : openMainWindow()) },
       { label: 'Manage watched projects…', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
-      { label: 'Create desktop shortcut', click: () => createDesktopShortcut() },
+      platformInfo.supportsDesktopShortcut ? { label: 'Create desktop shortcut', click: () => createDesktopShortcut() } : null,
       { label: 'Check for updates…', click: () => setupAutoUpdate(true) },
       { type: 'separator' },
       { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
-    ])
-  );
+    ].filter(Boolean);
+  tray.setContextMenu(Menu.buildFromTemplate(trayTemplate));
+}
+
+function showOrCreatePrimaryWindow() {
+  if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+    onboardingWindow.show();
+    onboardingWindow.focus();
+    return;
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+  openMainWindow();
+}
+
+function createNativeApplicationMenu() {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+  app.setAboutPanelOptions({
+    applicationName: 'Fama',
+    applicationVersion: app.getVersion(),
+    version: app.getVersion(),
+    copyright: 'Copyright © 2026 Christian Sierra',
+  });
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: 'Fama',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'Check for Updates…', click: () => setupAutoUpdate(true) },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'Show Fama', accelerator: 'Command+0', click: showOrCreatePrimaryWindow },
+        { label: 'Manage Watched Projects…', accelerator: 'Command+,', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]));
+  if (app.dock) {
+    app.dock.setMenu(Menu.buildFromTemplate([
+      { label: 'Show Fama', click: showOrCreatePrimaryWindow },
+      { label: 'Manage Watched Projects…', click: () => { if (mainWindow) mainWindow.hide(); openOnboardingWindow(); } },
+    ]));
+  }
 }
 
 app.on('second-instance', () => {
@@ -563,6 +638,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  createNativeApplicationMenu();
   createTray();
   applyLoginItemSetting(getPrefs().launchOnStartup);
   // Preserve the canonical working directory for browsed folders: Codex
@@ -579,6 +655,8 @@ app.whenReady().then(async () => {
   }
   setupAutoUpdate();
 });
+
+app.on('activate', showOrCreatePrimaryWindow);
 
 // Deliberately no window-all-closed handler. The main window hides instead of
 // closing (see the 'close' listener above), and if the onboarding window

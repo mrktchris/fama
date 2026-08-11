@@ -1,3 +1,25 @@
+# Fama v1.1.0 — Windows and macOS parity
+
+Pending release.
+
+Fama now ships from one shared Electron codebase as a Windows x64 app and a universal macOS app for Apple Silicon and Intel.
+
+## Added
+
+- Universal macOS `.dmg` and updater `.zip` packaging with the same application ID, runtime, features, privacy boundary, tests, and package-secret scan as Windows.
+- Native macOS application, Dock, menu-bar, and tray menus, plus standard reopen behavior when the Dock icon is clicked.
+- Platform-correct startup and built-in voice labels while preserving one shared settings interface.
+- Pull-request and tagged-release jobs that build both Windows and macOS, combine checksums, and attest both platform bundles.
+- A high-resolution macOS `.icns` generated from the same Signal Aperture identity used on Windows.
+
+## Compatibility and signing
+
+- macOS 12 or newer on Apple Silicon or Intel.
+- The Windows build remains x64.
+- Windows remains unsigned by Authenticode. macOS remains unsigned by Apple Developer ID and is not notarized until the repository owner supplies those signing credentials; hashes, the SBOM, package scans, and GitHub/Sigstore attestations remain mandatory.
+
+---
+
 # Fama v1.0.0 — first stable release
 
 Released 2026-08-11.

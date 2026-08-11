@@ -6,9 +6,9 @@ This is a small, actively-developed project with no long-term-support branches. 
 
 ## Release integrity
 
-Official downloads come only from this repository's GitHub Releases page. Each stable release includes `SHA256SUMS.txt`, a CycloneDX SBOM, and GitHub/Sigstore-signed build and SBOM attestations. The tagged-release workflow rebuilds on GitHub-hosted Windows runners, runs tests and the dependency audit, and scans the unpacked app for credential patterns and forbidden files before upload.
+Official downloads come only from this repository's GitHub Releases page. Each stable release includes `SHA256SUMS.txt`, a CycloneDX SBOM, and GitHub/Sigstore-signed build and SBOM attestations. The tagged-release workflow rebuilds on GitHub-hosted Windows and macOS runners, runs tests and the dependency audit, and scans both unpacked apps for credential patterns and forbidden files before upload.
 
-The Windows binaries are not currently Authenticode-signed. SmartScreen may therefore warn on first launch; the project does not claim a signing certificate it does not possess. See the README's **Verify a release** section for hash and attestation commands.
+The Windows binaries are not currently Authenticode-signed, and the macOS app is not currently Developer ID-signed or notarized. SmartScreen or Gatekeeper may therefore warn on first launch; the project does not claim signing identities it does not possess. See the README's **Verify a release** section for hash and attestation commands.
 
 ## Reporting a vulnerability
 

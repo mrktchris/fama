@@ -147,9 +147,14 @@ voiceToggleEl.addEventListener('click', () => {
 });
 refreshVoiceButton();
 
+const desktopPlatformInfoPromise = window.famaDesktop && window.famaDesktop.getPlatformInfo
+  ? window.famaDesktop.getPlatformInfo().catch(() => null)
+  : Promise.resolve(null);
+
 function updateVoiceModeBadge() {
-  narrator.refreshConfig().then((cfg) => {
-    voiceModeEl.textContent = cfg.cloud ? `OpenAI · ${cfg.model} · ~${cfg.narrationSeconds}s` : 'free (Windows voice)';
+  Promise.all([narrator.refreshConfig(), desktopPlatformInfoPromise]).then(([cfg, desktopInfo]) => {
+    const localVoiceLabel = desktopInfo && desktopInfo.voiceLabel ? desktopInfo.voiceLabel : 'free (system voice)';
+    voiceModeEl.textContent = cfg.cloud ? `OpenAI · ${cfg.model} · ~${cfg.narrationSeconds}s` : localVoiceLabel;
     voiceModeEl.classList.toggle('cloud', cfg.cloud);
     voiceModeEl.title = cfg.cloud
       ? `Using OpenAI text-to-speech (${cfg.model}, ${cfg.voice}), server-side, costs a small amount per line`

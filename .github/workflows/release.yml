@@ -1,4 +1,4 @@
-name: Release Windows app
+name: Release Windows and macOS apps
 
 on:
   push:
@@ -111,7 +111,114 @@ jobs:
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag @assets --clobber
-            gh release edit $tag --title "Fama v$version — First stable release" --notes-file CHANGELOG.md --latest
+            gh release edit $tag --title "Fama v$version" --notes-file CHANGELOG.md --latest
           } else {
-            gh release create $tag @assets --title "Fama v$version — First stable release" --notes-file CHANGELOG.md --latest --verify-tag
+            gh release create $tag @assets --title "Fama v$version" --notes-file CHANGELOG.md --latest --verify-tag
           }
+
+  macos-release:
+    runs-on: macos-latest
+    needs: windows-release
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --audit-level=high
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_REF_NAME" != "$expected" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $expected" >&2
+            exit 1
+          fi
+
+      - name: Build universal macOS DMG and updater zip
+        run: npm run dist:mac
+        env:
+          # electron-builder signs when the repository owner provides a real
+          # Developer ID certificate. Without one it produces an honest
+          # unsigned build and the release notes state that limitation.
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+
+      - name: Block secrets and forbidden files in macOS payload
+        run: node desktop/verify-package.js dist-desktop/mac-universal
+
+      - name: Assemble stable aliases and combined checksums
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          versioned_dmg="dist-desktop/Fama-${version}-macOS-universal.dmg"
+          versioned_zip="dist-desktop/Fama-${version}-macOS-universal.zip"
+          cp "$versioned_dmg" dist-desktop/Fama-macOS-universal.dmg
+          cp "$versioned_zip" dist-desktop/Fama-macOS-universal.zip
+
+          mkdir -p dist-desktop/release-base
+          gh release download "$GITHUB_REF_NAME" --pattern SHA256SUMS.txt --pattern fama-sbom.cdx.json --dir dist-desktop/release-base
+
+          mac_assets=(
+            "$versioned_dmg"
+            "$versioned_zip"
+            dist-desktop/Fama-macOS-universal.dmg
+            dist-desktop/Fama-macOS-universal.zip
+            dist-desktop/latest-mac.yml
+          )
+          if [[ -f "${versioned_zip}.blockmap" ]]; then
+            mac_assets+=("${versioned_zip}.blockmap")
+          fi
+          : > dist-desktop/MAC-SHA256SUMS.txt
+          for asset in "${mac_assets[@]}"; do
+            hash="$(shasum -a 256 "$asset" | awk '{print $1}')"
+            printf '%s *%s\n' "$hash" "$(basename "$asset")" >> dist-desktop/MAC-SHA256SUMS.txt
+          done
+          cat dist-desktop/release-base/SHA256SUMS.txt dist-desktop/MAC-SHA256SUMS.txt | sort -k2 > dist-desktop/SHA256SUMS.txt
+
+      - name: Create signed macOS build provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3.0.0
+        with:
+          subject-path: |
+            dist-desktop/Fama-*-macOS-universal.dmg
+            dist-desktop/Fama-*-macOS-universal.zip
+            dist-desktop/Fama-macOS-universal.dmg
+            dist-desktop/Fama-macOS-universal.zip
+
+      - name: Create signed macOS SBOM attestation
+        uses: actions/attest-sbom@10926c72720ffc3f7b666661c8e55b1344e2a365 # v2.0.0
+        with:
+          subject-path: |
+            dist-desktop/Fama-*-macOS-universal.dmg
+            dist-desktop/Fama-*-macOS-universal.zip
+            dist-desktop/Fama-macOS-universal.dmg
+            dist-desktop/Fama-macOS-universal.zip
+          sbom-path: dist-desktop/release-base/fama-sbom.cdx.json
+
+      - name: Add macOS app to the verified release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          assets=(
+            "dist-desktop/Fama-${version}-macOS-universal.dmg"
+            "dist-desktop/Fama-${version}-macOS-universal.zip"
+            dist-desktop/Fama-macOS-universal.dmg
+            dist-desktop/Fama-macOS-universal.zip
+            dist-desktop/latest-mac.yml
+            dist-desktop/SHA256SUMS.txt
+          )
+          if [[ -f "dist-desktop/Fama-${version}-macOS-universal.zip.blockmap" ]]; then
+            assets+=("dist-desktop/Fama-${version}-macOS-universal.zip.blockmap")
+          fi
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber

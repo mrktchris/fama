@@ -1,7 +1,8 @@
 {
   "name": "fama",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "See and hear Claude Code and Codex work live. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
+  "author": "Christian Sierra",
   "main": "desktop/main.js",
   "bin": {
     "fama": "server.js"
@@ -11,13 +12,18 @@
     "electron": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:win-dir": "electron-builder --win dir --publish never",
+    "dist:mac": "electron-builder --mac dmg zip --universal --publish never",
+    "postdist:mac": "node desktop/verify-package.js dist-desktop/mac-universal",
+    "dist:mac-dir": "electron-builder --mac dir --universal --publish never",
+    "postdist:mac-dir": "node desktop/verify-package.js dist-desktop/mac-universal",
     "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --ignore=\"^/\\.env(?:\\..*)?$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/(docs|test|bin)(?:/|$)\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\"^/AGENTS\\.md$\" --ignore=\"^/package-lock\\.json$\" --ignore=\"^/(CHANGELOG|CODE_OF_CONDUCT|CONTRIBUTING|README|SECURITY)\\.md$\" --ignore=\"^/desktop/(generate-icon\\.ps1|trim-locales\\.js|verify-package\\.js|write-.*\\.js)$\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
     "postdist:win-packager": "node desktop/trim-locales.js && node desktop/verify-package.js",
     "dist:linux-packager": "electron-packager . fama --platform=linux --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.png --prune=true --ignore=\"^/\\.env(?:\\..*)?$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/(docs|test|bin)(?:/|$)\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\"^/AGENTS\\.md$\" --ignore=\"^/package-lock\\.json$\" --ignore=\"^/(CHANGELOG|CODE_OF_CONDUCT|CONTRIBUTING|README|SECURITY)\\.md$\" --ignore=\"^/desktop/(generate-icon\\.ps1|trim-locales\\.js|verify-package\\.js|write-.*\\.js)$\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
     "postdist:linux-packager": "node desktop/trim-locales.js && node desktop/verify-package.js",
-    "dist:mac-packager": "electron-packager . Fama --platform=darwin --arch=x64 --out=dist-desktop --overwrite --prune=true --ignore=\"^/\\.env(?:\\..*)?$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/(docs|test|bin)(?:/|$)\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\"^/AGENTS\\.md$\" --ignore=\"^/package-lock\\.json$\" --ignore=\"^/(CHANGELOG|CODE_OF_CONDUCT|CONTRIBUTING|README|SECURITY)\\.md$\" --ignore=\"^/desktop/(generate-icon\\.ps1|trim-locales\\.js|verify-package\\.js|write-.*\\.js)$\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
+    "dist:mac-packager": "npm run dist:mac-dir",
     "verify-package": "node desktop/verify-package.js",
     "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1",
+    "generate-icon:mac": "bash desktop/generate-mac-icon.sh",
     "test": "node --test test/*.test.js"
   },
   "license": "MIT",
@@ -53,6 +59,50 @@
     "win": {
       "target": "nsis",
       "icon": "desktop/icon.ico"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "desktop/icon.icns",
+      "artifactName": "Fama-${version}-macOS-${arch}.${ext}",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "extendInfo": {
+        "NSHighResolutionCapable": true
+      }
+    },
+    "dmg": {
+      "title": "Fama ${version}",
+      "backgroundColor": "#080b12",
+      "iconSize": 112,
+      "window": {
+        "width": 560,
+        "height": 360
+      },
+      "contents": [
+        {
+          "x": 170,
+          "y": 180,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 180,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

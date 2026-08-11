@@ -95,8 +95,12 @@
   const desktopAppSection = document.getElementById('desktop-app-section');
   const notificationsCheckbox = document.getElementById('settings-notifications');
   const launchStartupCheckbox = document.getElementById('settings-launch-startup');
+  const launchStartupLabel = document.getElementById('settings-launch-startup-label');
   if (window.famaDesktop) {
     desktopAppSection.classList.remove('hidden');
+    window.famaDesktop.getPlatformInfo().then((info) => {
+      if (info && info.startupLabel) launchStartupLabel.textContent = info.startupLabel;
+    });
     window.famaDesktop.getPrefs().then((prefs) => {
       notificationsCheckbox.checked = prefs.notificationsEnabled;
       launchStartupCheckbox.checked = prefs.launchOnStartup;
