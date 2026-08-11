@@ -1,5 +1,12 @@
 name: CI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [master]
@@ -10,27 +17,39 @@ jobs:
   test:
     name: Test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         node: [18, 22]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node }}
-      - run: npm install
+          cache: npm
+      # The source server supports Node 18 without development dependencies.
+      # Current Electron build tooling requires Node 22.12+, so only the
+      # Node 22 lane installs the complete development toolchain.
+      - run: npm ci --omit=dev
+        if: matrix.node == 18
+      - run: npm ci
+        if: matrix.node == 22
       - run: npm test
+      - run: npm audit --audit-level=high
+        if: matrix.node == 22
 
   windows-package:
     name: Windows package build + secret scan
     runs-on: windows-latest
+    timeout-minutes: 20
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - run: npm install
+          cache: npm
+      - run: npm ci
       # The real reason this job exists: verify-package.js is the gate that
       # would have caught the v0.12.0 leak (stray dev logs shipped in a
       # release zip) before upload, not after. Running it in CI on every
@@ -41,7 +60,7 @@ jobs:
       # dist:win-packager produces a folder, not a zip (zipping for an
       # actual release is a separate, manual step); upload-artifact zips a
       # directory automatically for download, no extra step needed here.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fama-win32-x64
           path: dist-desktop/Fama-win32-x64
@@ -65,21 +84,22 @@ jobs:
     # purchase and identity verification from a CA (or Microsoft's Trusted
     # Signing service), which only the repo owner can do, not something any
     # CI config can substitute for.
-    name: Windows signed installer (NSIS)
+    name: Windows installer (NSIS)
     runs-on: windows-latest
     needs: test
-    continue-on-error: true # experimental: unverified whether GH's runners avoid the same wall, must not block the rest of CI either way
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - run: npm install
+          cache: npm
+      - run: npm ci
       - run: npm run dist:win
         env:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: fama-installer-nsis

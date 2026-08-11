@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first. Versions match `package.json` and the git tags each commit was made under.
 
+## Unreleased
+
+- **Deep security, privacy, reliability, accessibility, and dependency audit.** Hardened the loopback HTTP surface with a strict CSP and related browser security headers, explicit method handling, decoded path-containment checks, same-origin token delivery, bounded transcript reads/backlog memory, redaction of provider errors and narrated credentials, and safe image handling that never auto-loads transcript-supplied remote URLs or SVG. Hardened Electron navigation, IPC-adjacent project selection, child-process launch, config permissions, and shortcut creation. Cloud speech cancellation now prevents stopped requests from resurfacing through queued fallback. Settings gained modal/focus/ARIA behavior, and the local UI no longer requests Google Fonts. Electron/build dependencies were upgraded to audited versions; `npm audit` is clean and CI now enforces it. Added focused regression coverage and shared repository/agent guidance.
+- **Dominican-English voice direction is now a real product control, not a blank field or chat note.** Added a one-click Settings preset and a tested prompt expander: the short label becomes a full, respectful delivery instruction with Dominican-American cadence and subtle Caribbean Spanish influence, explicitly avoiding caricature. Hume's prompt-designed accent guidance informed the shape, but Fama still sends it through its existing OpenAI `gpt-4o-mini-tts` provider; Hume/Octave itself is not integrated.
+
 ## 0.12.4
 
 - **Codex is now a live second provider, not just a parser sitting unused.** Fama discovers active `~/.codex/sessions/YYYY/MM/DD/*.jsonl` transcripts, reads their `session_meta` identity, matches their recorded working directory only to projects the user selected, tails new records through the existing SSE pipeline, and tags every Claude/Codex event with its provider. The Electron shell now passes real selected project roots to the server so this matching is explicit rather than inferred from lossy encoded folder names. Added focused recursive-discovery/project-isolation tests plus real HTTP/SSE integration tests that append both Claude and Codex records and verify provider, session, and project identity end to end.

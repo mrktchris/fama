@@ -11,9 +11,9 @@
     "electron": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:win-dir": "electron-builder --win dir --publish never",
-    "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --asar=false --ignore=\"^/\\.env$\" --ignore=\"^/\\.env\\.local$\" --ignore=\"^/\\.env\\.production$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/docs\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
+    "dist:win-packager": "electron-packager . Fama --platform=win32 --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.ico --prune=true --ignore=\"^/\\.env(?:\\..*)?$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/(docs|test|bin)(?:/|$)\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\"^/AGENTS\\.md$\" --ignore=\"^/package-lock\\.json$\" --ignore=\"^/(CHANGELOG|CODE_OF_CONDUCT|CONTRIBUTING|README|SECURITY)\\.md$\" --ignore=\"^/desktop/(generate-icon\\.ps1|trim-locales\\.js|verify-package\\.js|write-.*\\.js)$\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
     "postdist:win-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js && node desktop/verify-package.js",
-    "dist:linux-packager": "electron-packager . fama --platform=linux --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.png --prune=true --asar=false --ignore=\"^/\\.env$\" --ignore=\"^/\\.env\\.local$\" --ignore=\"^/\\.env\\.production$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/docs\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
+    "dist:linux-packager": "electron-packager . fama --platform=linux --arch=x64 --out=dist-desktop --overwrite --icon=desktop/icon.png --prune=true --ignore=\"^/\\.env(?:\\..*)?$\" --ignore=\"^/usage\\.json$\" --ignore=\"^/dist-desktop\" --ignore=\"^/(docs|test|bin)(?:/|$)\" --ignore=\"^/\\.git\" --ignore=\"^/\\.github\" --ignore=\"^/AGENTS\\.md$\" --ignore=\"^/package-lock\\.json$\" --ignore=\"^/(CHANGELOG|CODE_OF_CONDUCT|CONTRIBUTING|README|SECURITY)\\.md$\" --ignore=\"^/desktop/(generate-icon\\.ps1|trim-locales\\.js|verify-package\\.js|write-.*\\.js)$\" --ignore=\".*\\.pid$\" --ignore=\".*\\.log$\" --ignore=\"^/tmp\"",
     "postdist:linux-packager": "node desktop/trim-locales.js && node desktop/write-update-manifest.js && node desktop/verify-package.js",
     "verify-package": "node desktop/verify-package.js",
     "generate-icon": "powershell -ExecutionPolicy Bypass -File desktop/generate-icon.ps1",
@@ -28,12 +28,12 @@
     "url": "https://github.com/mrktchris/fama.git"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9"
+    "electron-updater": "6.8.9"
   },
   "devDependencies": {
-    "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
-    "electron-packager": "^17.1.2"
+    "electron": "43.3.0",
+    "electron-builder": "26.15.3",
+    "electron-packager": "17.1.2"
   },
   "build": {
     "appId": "com.chrissierra.fama",

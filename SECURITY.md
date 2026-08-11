@@ -17,7 +17,7 @@ Include, if you can:
 
 ## What counts
 
-Fama runs entirely on your own machine (`127.0.0.1` only, never bound to your LAN) and its only outbound network calls are to OpenAI's API, and only when you've configured your own key for the optional cloud voice. Given that scope, things worth reporting include:
+Fama's server runs entirely on your own machine (`127.0.0.1` only, never bound to your LAN). Transcript content leaves the device only when you configure optional OpenAI cloud voice. The packaged desktop shell separately checks GitHub Releases for updates, and links embedded in transcript image events are never fetched automatically. Given that scope, things worth reporting include:
 
 - A way to reach the local server from something other than the loopback interface
 - A way to bypass the CSRF token check on a mutating request

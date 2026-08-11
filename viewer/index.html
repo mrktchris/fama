@@ -5,11 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fama</title>
 <link rel="icon" href="/icon-mark.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Inter only, per the Aurora/Crystal brand system's type spec (UI: Inter /
-     SF Pro Display / system-ui). Replaces the retired Cinzel display face. -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -40,7 +35,7 @@
     </div>
 
     <h1>Fama</h1>
-    <span id="status">connecting&hellip;</span>
+    <span id="status" role="status" aria-live="polite">connecting&hellip;</span>
     <!-- Electron-only, same reasoning as the desktop-app-only settings section:
          meaningless in a plain browser tab (npm start), which can't spawn a
          native folder picker or manage the server's watch list at runtime.
@@ -48,10 +43,10 @@
     <button id="manage-projects" type="button" title="Add or remove watched projects" class="hidden">&#128193; projects</button>
 
     <div id="header-actions">
-      <span id="voice-mode" title="Which voice backend is active"></span>
+      <span id="voice-mode" title="Which voice backend is active" aria-live="polite"></span>
       <button id="voice-toggle" type="button">&#128264; enable voice</button>
       <button id="stop-talking" type="button" title="Cancel the current line without turning voice off" disabled>&#9209; stop talking</button>
-      <button id="settings-toggle" type="button" title="Settings" aria-label="Settings">&#9881;</button>
+      <button id="settings-toggle" type="button" title="Settings" aria-label="Settings" aria-controls="settings-overlay" aria-expanded="false">&#9881;</button>
     </div>
   </header>
 
@@ -63,17 +58,17 @@
     <p class="empty-sub">Start or continue a Claude Code or Codex session in this project. It shows up here within a second, and reads itself out loud once voice is on.</p>
   </div>
 
-  <div id="settings-overlay" class="settings-overlay hidden">
-    <div class="settings-modal" role="dialog" aria-label="Settings">
+  <div id="settings-overlay" class="settings-overlay hidden" aria-hidden="true">
+    <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="settings-modal-header">
-        <h2>Settings</h2>
+        <h2 id="settings-title">Settings</h2>
         <button id="settings-close" type="button" aria-label="Close">&times;</button>
       </div>
 
       <section class="settings-section" id="usage-section">
         <h3>Usage <span class="settings-hint">estimated, this key, this machine, since last reset, not synced to real billing</span></h3>
         <div class="usage-stat">
-          <span class="usage-amount" id="usage-total">$0.00</span>
+          <span class="usage-amount" id="usage-total" aria-live="polite">$0.00</span>
           <button type="button" id="usage-reset" title="Reset this counter to zero">reset</button>
         </div>
         <div class="usage-breakdown" id="usage-breakdown">no calls yet</div>
@@ -86,10 +81,10 @@
           <span>OpenAI API key</span>
           <div class="key-input-row">
             <input type="password" id="settings-api-key" placeholder="sk-...">
-            <button type="button" id="settings-key-toggle" title="Show/hide">&#128065;</button>
+            <button type="button" id="settings-key-toggle" title="Show/hide" aria-label="Show API key" aria-pressed="false">&#128065;</button>
           </div>
         </label>
-        <div id="settings-key-status" class="settings-key-status"></div>
+        <div id="settings-key-status" class="settings-key-status" role="status" aria-live="polite"></div>
 
         <label class="settings-field">
           <span>Model</span>
@@ -114,9 +109,10 @@
 
         <label class="settings-field">
           <span>Voice style / accent <span id="voice-style-support" class="settings-hint"></span></span>
-          <input type="text" id="settings-voice-style" spellcheck="true" placeholder="e.g. calm British accent, dry and understated">
+          <input type="text" id="settings-voice-style" spellcheck="true" placeholder="e.g. natural Dominican-American English, warm and conversational">
         </label>
         <div class="preset-row">
+          <button type="button" class="preset-chip" data-target="voice-style" data-value="Dominican">Dominican English</button>
           <button type="button" class="preset-chip" data-target="voice-style" data-value="Calm, professional, understated">Calm &amp; professional</button>
           <button type="button" class="preset-chip" data-target="voice-style" data-value="Warm, upbeat, energetic delivery">Warm &amp; upbeat</button>
           <button type="button" class="preset-chip" data-target="voice-style" data-value="Dry British accent, deadpan delivery">Dry British</button>
@@ -152,7 +148,7 @@
           <button type="button" id="settings-test">Hear a test line</button>
           <button type="button" id="settings-remove-key" class="danger">Remove key</button>
         </div>
-        <div id="settings-save-status" class="settings-save-status"></div>
+        <div id="settings-save-status" class="settings-save-status" role="status" aria-live="polite"></div>
       </section>
 
       <section class="settings-section">
@@ -209,6 +205,7 @@
     </div>
   </div>
 
+  <script src="/auth.js"></script>
   <script src="/mascot.js"></script>
   <script src="/speech.js"></script>
   <script src="/app.js"></script>

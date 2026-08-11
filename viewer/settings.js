@@ -85,6 +85,7 @@
   const testBtn = document.getElementById('settings-test');
   const removeBtn = document.getElementById('settings-remove-key');
   const saveStatusEl = document.getElementById('settings-save-status');
+  let focusBeforeOpen = null;
 
   // Electron-only controls (native notifications, launch at startup): meaningless
   // when this same page is opened plain in a browser tab (`npm start`), so the
@@ -139,7 +140,7 @@
     const supported = modelSelect.value === 'gpt-4o-mini-tts';
     voiceStyleSupportEl.textContent = supported ? '' : '(only gpt-4o-mini-tts honors this, pick it above)';
     voiceStyleInput.disabled = !supported;
-    voiceStyleInput.placeholder = supported ? 'e.g. calm British accent, dry and understated' : 'switch the model above to use this';
+    voiceStyleInput.placeholder = supported ? 'e.g. natural Dominican-American English, warm and conversational' : 'switch the model above to use this';
   }
   modelSelect.addEventListener('change', updateVoiceStyleSupport);
 
@@ -195,13 +196,20 @@
   });
 
   function open() {
+    focusBeforeOpen = document.activeElement;
     overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    toggleBtn.setAttribute('aria-expanded', 'true');
     refreshFromServer();
     refreshUsage();
+    closeBtn.focus();
   }
   function close() {
     overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
+    toggleBtn.setAttribute('aria-expanded', 'false');
     saveStatusEl.textContent = '';
+    if (focusBeforeOpen && typeof focusBeforeOpen.focus === 'function') focusBeforeOpen.focus();
   }
 
   toggleBtn.addEventListener('click', open);
@@ -211,10 +219,26 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !overlay.classList.contains('hidden')) close();
+    if (e.key === 'Tab' && !overlay.classList.contains('hidden')) {
+      const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
   });
 
   keyToggleBtn.addEventListener('click', () => {
     apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+    const visible = apiKeyInput.type === 'text';
+    keyToggleBtn.setAttribute('aria-pressed', String(visible));
+    keyToggleBtn.setAttribute('aria-label', visible ? 'Hide API key' : 'Show API key');
   });
 
   function refreshFromServer() {
@@ -272,11 +296,13 @@
               }.`
             : 'Saved. No key set, using the free browser voice.';
           refreshFromServer();
+          return true;
         });
       })
       .catch((err) => {
         saveStatusEl.textContent = 'Save failed: ' + err.message;
         saveStatusEl.classList.add('error');
+        return false;
       });
   }
 
@@ -297,7 +323,8 @@
     const sample =
       "So I'm thinking about whether to use approach A or approach B here, and honestly A seems cleaner " +
       'since it avoids the extra dependency, but let me actually double check that before committing to it.';
-    saveSettings().then(() => {
+    saveSettings().then((saved) => {
+      if (!saved) return;
       window.narrator.say(sample, 'thinking');
       setTimeout(refreshUsage, 3000); // rough guess at when the call has actually landed
     });

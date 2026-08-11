@@ -271,6 +271,8 @@ function laneFor(sessionId) {
   pinBtn.type = 'button';
   pinBtn.className = 'lane-pin';
   pinBtn.title = 'Listen to this session, overriding auto-follow';
+  pinBtn.setAttribute('aria-label', 'Listen to this session, overriding auto-follow');
+  pinBtn.setAttribute('aria-pressed', 'false');
   pinBtn.textContent = '🔊';
   pinBtn.addEventListener('click', (e) => {
     e.stopPropagation(); // don't also toggle collapse
@@ -322,6 +324,8 @@ function markCurrentLane() {
     l.el.classList.remove('is-current', 'is-pinned');
     const badge = l.el.querySelector('.lane-current-badge');
     if (badge) badge.textContent = 'following';
+    const pin = l.el.querySelector('.lane-pin');
+    if (pin) pin.setAttribute('aria-pressed', 'false');
   }
   const current = lanes.get(focusSessionId() || 'unknown');
   if (current) {
@@ -330,6 +334,8 @@ function markCurrentLane() {
       current.el.classList.add('is-pinned');
       const badge = current.el.querySelector('.lane-current-badge');
       if (badge) badge.textContent = 'pinned';
+      const pin = current.el.querySelector('.lane-pin');
+      if (pin) pin.setAttribute('aria-pressed', 'true');
     }
   }
 }
@@ -357,9 +363,7 @@ function addRow(lane, evt) {
   if (evt.kind === 'image' && evt.media && evt.media.tooLarge) {
     detail.textContent = '[image too large to preview]';
   } else if (evt.kind === 'image' && evt.media) {
-    const src = evt.media.data
-      ? `data:${evt.media.mediaType || 'image/png'};base64,${evt.media.data}`
-      : evt.media.url;
+    const src = evt.media.data ? `data:${evt.media.mediaType || 'image/png'};base64,${evt.media.data}` : null;
     if (src) {
       const link = document.createElement('a');
       link.href = src;
@@ -371,6 +375,13 @@ function addRow(lane, evt) {
       img.alt = 'image';
       img.loading = 'lazy';
       link.appendChild(img);
+      detail.appendChild(link);
+    } else if (evt.media.externalUrl) {
+      const link = document.createElement('a');
+      link.href = evt.media.externalUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'open external image';
       detail.appendChild(link);
     } else {
       detail.textContent = evt.detail || '';

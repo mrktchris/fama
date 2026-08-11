@@ -88,6 +88,33 @@ test('eventsFromRecord: base64 image block carries its actual media data through
   assert.deepEqual(events[0].media, { mediaType: 'image/png', data: 'AAAA' });
 });
 
+test('eventsFromRecord: executable inline image types are not rendered', () => {
+  const [event] = eventsFromRecord({
+    type: 'assistant',
+    message: { content: [{ type: 'image', source: { type: 'base64', media_type: 'image/svg+xml', data: 'PHN2Zz48c2NyaXB0Lz48L3N2Zz4=' } }] },
+  });
+  assert.equal(event.kind, 'image');
+  assert.equal(event.media, null);
+});
+
+test('eventsFromRecord: remote image URLs become explicit links and unsafe schemes are dropped', () => {
+  const [safe] = eventsFromRecord({
+    type: 'assistant',
+    message: { content: [{ type: 'image', source: { type: 'url', url: 'https://user:pass@example.com/image.png' } }] },
+  });
+  assert.equal(safe.media.externalUrl, 'https://example.com/image.png');
+  const [unsafe] = eventsFromRecord({
+    type: 'assistant',
+    message: { content: [{ type: 'image', source: { type: 'url', url: 'javascript:alert(1)' } }] },
+  });
+  assert.equal(unsafe.media, null);
+  const [insecure] = eventsFromRecord({
+    type: 'assistant',
+    message: { content: [{ type: 'image', source: { type: 'url', url: 'http://example.com/image.png' } }] },
+  });
+  assert.equal(insecure.media, null);
+});
+
 test('eventsFromRecord: an oversized base64 image degrades to a tooLarge flag instead of ballooning the event', () => {
   const events = eventsFromRecord(assistantRecord([
     { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(1_500_001) } },

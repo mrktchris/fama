@@ -91,3 +91,19 @@ test('FileTailer: restarts cleanly if the file shrinks (truncated/rotated) inste
   assert.doesNotThrow(() => tailer.poll());
   assert.deepEqual(seen, [{ aLongerRecordToStart: 12345 }, { b: 2 }], 'should pick up the new content after resetting, not crash or hang');
 });
+
+test('FileTailer: reads a multi-megabyte append incrementally without losing the record', () => {
+  const file = tmpFile();
+  fs.writeFileSync(file, '');
+  const seen = [];
+  const tailer = new FileTailer(file, (records) => seen.push(...records));
+  const value = 'x'.repeat(2 * 1024 * 1024);
+  fs.appendFileSync(file, `${JSON.stringify({ value })}\n`);
+  tailer.poll();
+  assert.deepEqual(seen, []);
+  tailer.poll();
+  assert.deepEqual(seen, []);
+  tailer.poll();
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].value.length, value.length);
+});

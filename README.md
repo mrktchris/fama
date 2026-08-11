@@ -8,7 +8,7 @@ Fama tails a live transcript and speaks it back to you as it happens — nothing
 
 A local, always-on window into what your coding agents are doing right now: what they're thinking when a readable summary is available, which tool just ran, and what came back. Local-first by design: it tails the session transcript files Claude Code and Codex already write on your own machine, with no required API calls and no cloud dependency just to open it. Optional cloud voice is available if you want it to sound less robotic, with a persona and accent you control.
 
-**Privacy, plainly:** local by default. The dashboard reads files already on your own disk and never phones home, no account, no telemetry, no analytics. When optional cloud voice is enabled, the text being narrated (and, if the rewrite step is on, the raw thinking/text it's condensed from) is sent to OpenAI, using your own key, billed to your own account, never Fama's. That's the only path any transcript content ever takes off your machine. Two separate, content-free network calls happen regardless of that setting: the UI loads its display font from Google Fonts, and the desktop app checks this repo's GitHub Releases on launch. Neither carries anything about you or your work. See [Voice, in detail](#voice-in-detail) below for the exact mechanics.
+**Privacy, plainly:** local by default. The dashboard reads files already on your own disk and has no account, telemetry, analytics, or remotely hosted UI assets. When optional cloud voice is enabled, the text being narrated (and, if the rewrite step is on, the raw thinking/text it's condensed from) is sent to OpenAI, using your own key, billed to your own account, never Fama's. That's the only path any transcript content ever takes off your machine. The packaged desktop app also makes a content-free update check against this repo's GitHub Releases on launch; it carries nothing about you or your work. See [Voice, in detail](#voice-in-detail) below for the exact mechanics.
 
 ![screenshot placeholder: main dashboard with lanes and mascot](docs/screenshot-dashboard.png)
 <!-- Real screenshots go here before this ships anywhere public. Run the app, capture: (1) the main dashboard with a lane or two active, (2) the Settings panel open, (3) the tray icon / native window. Drop them in docs/ with these exact filenames and the placeholders above resolve automatically. -->
@@ -35,7 +35,7 @@ Then open http://localhost:4317. Windows is the only platform this has actually 
 
 - **Live visual dashboard.** One lane per active Claude Code or Codex session, streaming text, available reasoning summaries, tool calls, and results in real time over Server-Sent Events. A small animated mascot shows idle / thinking / speaking / running-a-tool at a glance.
 - **Spoken narration**, free by default (your OS's built-in voice) or OpenAI cloud voice if you want it to sound human. Click **enable voice** once, that's the only manual step.
-- **A rewrite step**, not just reading raw text verbatim: thinking and text events get a quick pass through a cheap language model first, turning rambling internal monologue into one short, natural spoken line. Length is a 3–30 second dial with a live cost estimate, persona and voice accent are both free-text fields you control (try "a sharp CMO giving a fast executive summary," or a calm British accent).
+- **A rewrite step**, not just reading raw text verbatim: thinking and text events get a quick pass through a cheap language model first, turning rambling internal monologue into one short, natural spoken line. Length is a 3–30 second dial with a live cost estimate, persona and voice accent are both free-text fields you control (try "a sharp CMO giving a fast executive summary," or the built-in Dominican-English voice preset).
 - **Usage tracking.** Running dollar total for the cloud voice, right in Settings, resets independently of your real OpenAI billing.
 - **Desktop app** (Windows now, Mac buildable from source, see below): system tray, closes to tray instead of quitting, one-click update checks against this repo's releases.
 
@@ -55,6 +55,8 @@ By default it speaks narrated text and current thinking. Tool-call announcements
 
 **Cloud tier (optional, costs money):** click the gear icon, paste an OpenAI key, pick a model. `gpt-4o-mini-tts` is the recommended default, it's the only model that honors the accent/style field, and was a reasonable latency/cost pick against the older `tts-1`/`tts-1-hd` models in informal testing during development, not a rigorous published benchmark. If a cloud call ever fails, that one line falls back to the free voice automatically, you never get silence.
 
+**Dominican-English direction:** Settings includes a dedicated preset. Fama expands the short label into a full voice-design instruction: warm, natural Dominican-American English, authentic cadence, subtle Caribbean Spanish influence, clear and conversational, never exaggerated or stereotyped. This follows the prompt-specific voice-design pattern described by [Hume's accent guidance](https://www.hume.ai/blog/how-to-generate-ai-voices-with-accents), but the provider in Fama today is still OpenAI; Hume/Octave is research input, not an implemented provider.
+
 Cost math: lines are capped at 3–30 seconds of speech, live estimate shown in Settings as you adjust the slider, tracked running total in the Usage panel. It's cheap, real usage lands in cents per session for most people, but treat the live tracker as the real number, not the paragraph you're reading now. Your `.env` file is gitignored and the real key is never echoed back to the browser after you save it, only whether one is configured.
 
 ### Latency
@@ -73,14 +75,13 @@ npm install
 npm run electron        # test it first, dev mode
 npx electron-builder --mac --publish never
 ```
-Needs Xcode Command Line Tools (`xcode-select --install`) and Node 18+. Unsigned, so macOS Gatekeeper will block it the first time, right-click the app → Open, once, to approve it.
+Needs Xcode Command Line Tools (`xcode-select --install`) and Node 22.12+ for the current Electron build toolchain. The source server itself remains compatible with Node 18+. Unsigned, so macOS Gatekeeper will block it the first time, right-click the app → Open, once, to approve it.
 
 **Updates:** the packaged app checks this repo's GitHub Releases on launch and, if something newer is out, offers to open the Releases page for you. It can't install itself in place yet (see Known limitations below), so "one-click" currently means one click to get to the download, not a fully automatic update. Nothing happens without your click either way.
 
 ## Known limitations
 
 - **It does not separate clients.** Every Claude Code session launched from the same working directory writes into the same project folder on disk, so if two unrelated threads are active at once, both narrate into the same feed. Click a lane's header to collapse one, or watch separate projects as separate entries instead (Settings → tray → Manage watched projects) for real separation.
-- Requires Node.js installed and on PATH even in the packaged app, doesn't bundle its own runtime yet.
 - Windows only for a pre-built binary right now.
 - Subagent transcripts aren't shown yet, only top-level sessions.
 - **Update checks work, one-click install doesn't (yet).** The app correctly detects when a newer version is out and opens the Releases page for you, but the update-in-place mechanism assumes an NSIS install, and the Releases page currently ships the portable zip as the primary download. Re-downloading and unzipping (or re-running the installer) is the real update path until that's wired together.
@@ -104,8 +105,8 @@ Those are audio-only, hook- or CLI-triggered. What's different here: a standalon
 - [ ] Proper signed Windows installer via GitHub Actions CI (also solves the Mac build without needing Mac hardware locally, and unlocks real one-click auto-install, see Known limitations above)
 - [ ] Subagent lanes, nested under their parent session
 - [ ] Detect when a session is specifically waiting on a permission decision, not just gone quiet, and say so in the notification differently
-- [ ] Bundle a Node runtime so the desktop app needs zero prerequisites
-- [ ] Upgrade Electron/electron-builder (current `npm audit` reports 13 vulnerabilities, all in build-tooling devDependencies confirmed not to ship in the actual package; still worth clearing, a major-version bump needs its own dedicated test pass, not a same-day fix)
+- [x] Use Electron's bundled Node runtime so the packaged app needs no separate Node.js install or PATH dependency.
+- [x] Upgrade Electron/electron-builder and clear the build-tool dependency audit; CI now enforces a high-severity audit gate.
 - [ ] Actual code-signing certificate (or Microsoft Trusted Signing) — the CI pipeline is ready and waiting for one, this is a real purchase/identity-verification step for the repo owner, not an engineering task
 - [ ] Wire the installer into the actual auto-update flow (download + run silently) now that a real installer exists to target
 
