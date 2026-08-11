@@ -354,7 +354,9 @@ function addRow(lane, evt) {
   // Image events carry the actual picture (see lib/parse.js's media field)
   // rather than just a "[image]" caption — render it as a real thumbnail,
   // click to view full size, instead of unreadable placeholder text.
-  if (evt.kind === 'image' && evt.media) {
+  if (evt.kind === 'image' && evt.media && evt.media.tooLarge) {
+    detail.textContent = '[image too large to preview]';
+  } else if (evt.kind === 'image' && evt.media) {
     const src = evt.media.data
       ? `data:${evt.media.mediaType || 'image/png'};base64,${evt.media.data}`
       : evt.media.url;

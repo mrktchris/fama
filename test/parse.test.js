@@ -88,6 +88,14 @@ test('eventsFromRecord: base64 image block carries its actual media data through
   assert.deepEqual(events[0].media, { mediaType: 'image/png', data: 'AAAA' });
 });
 
+test('eventsFromRecord: an oversized base64 image degrades to a tooLarge flag instead of ballooning the event', () => {
+  const events = eventsFromRecord(assistantRecord([
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'A'.repeat(1_500_001) } },
+  ]));
+  assert.equal(events[0].kind, 'image');
+  assert.deepEqual(events[0].media, { tooLarge: true });
+});
+
 test('eventsFromRecord: an image inside a tool_result surfaces as its own image event alongside the text result', () => {
   const events = eventsFromRecord(userRecord([{
     type: 'tool_result',
