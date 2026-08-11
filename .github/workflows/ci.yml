@@ -32,13 +32,7 @@ jobs:
       # Node 22 lane installs the complete development toolchain.
       - run: npm ci --omit=dev
         if: matrix.node == 18
-      # Electron 43's development package requires Node >=22.12. The Node 18
-      # lane validates the dependency-light server/runtime contract without
-      # installing desktop build tooling that cannot run on that Node line.
-      - run: npm ci --omit=dev
-        if: matrix.node == 18
       - run: npm ci
-        if: matrix.node != 18
         if: matrix.node == 22
       - run: npm test
       - run: npm audit --audit-level=high
