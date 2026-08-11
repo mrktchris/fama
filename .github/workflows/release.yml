@@ -1,0 +1,59 @@
+name: Release Windows installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --audit-level=high
+      - name: Verify tag matches package version
+        shell: pwsh
+        run: |
+          $expected = "v$((Get-Content package.json -Raw | ConvertFrom-Json).version)"
+          if ($env:GITHUB_REF_NAME -ne $expected) {
+            throw "Tag $env:GITHUB_REF_NAME does not match package version $expected"
+          }
+      - name: Build installer and updater metadata
+        run: npm run dist:win
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - name: Block secrets and forbidden files before publishing
+        run: node desktop/verify-package.js dist-desktop/win-unpacked
+      - name: Publish installer, blockmap, and update manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $assets = @(
+            (Get-ChildItem dist-desktop -Filter 'Fama-Setup-*.exe' | Select-Object -First 1 -ExpandProperty FullName),
+            (Resolve-Path 'dist-desktop/latest.yml').Path,
+            (Get-ChildItem dist-desktop -Filter '*.blockmap' | Select-Object -First 1 -ExpandProperty FullName)
+          )
+          if ($assets -contains $null) { throw 'Installer update assets are incomplete.' }
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+          } else {
+            gh release create $tag @assets --generate-notes --verify-tag
+          }

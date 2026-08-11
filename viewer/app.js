@@ -78,7 +78,7 @@ speakToolsEl.addEventListener('change', () => savePrefs({ speakTools: speakTools
 
 // --- voice controls -----------------------------------------------------
 
-narrator.onStateChange = (isSpeaking) => {
+narrator.configure({ onStateChange: (isSpeaking) => {
   window.mascot.setSpeaking(isSpeaking);
   stopTalkingEl.disabled = !isSpeaking;
   if (speakingLaneEl) {
@@ -92,7 +92,7 @@ narrator.onStateChange = (isSpeaking) => {
       speakingLaneEl = lane.el;
     }
   }
-};
+} });
 
 // Cancels only the current/queued line(s), voice stays enabled and keeps
 // narrating whatever comes next, this is deliberately not the same as the
@@ -100,17 +100,18 @@ narrator.onStateChange = (isSpeaking) => {
 stopTalkingEl.addEventListener('click', () => narrator.stop());
 
 function refreshVoiceButton() {
-  voiceToggleEl.textContent = narrator.enabled ? '🔊 voice on' : '🔈 enable voice';
-  voiceToggleEl.classList.toggle('active', narrator.enabled);
+  const state = narrator.status();
+  voiceToggleEl.textContent = state.enabled ? '🔊 voice on' : '🔈 enable voice';
+  voiceToggleEl.classList.toggle('active', state.enabled);
 }
 
 voiceToggleEl.addEventListener('click', () => {
-  if (!narrator.supported) {
+  if (!narrator.status().supported) {
     voiceToggleEl.textContent = 'speech not supported here';
     voiceToggleEl.disabled = true;
     return;
   }
-  if (narrator.enabled) narrator.disable();
+  if (narrator.status().enabled) narrator.disable();
   else narrator.enable();
   refreshVoiceButton();
 });
@@ -131,7 +132,7 @@ narrator.ready.then(() => updateVoiceModeBadge());
 function populateVoices() {
   const voices = narrator.listVoices();
   if (!voices.length) return;
-  const current = narrator.voice ? narrator.voice.name : null;
+  const current = narrator.status().voiceName;
   voiceSelectEl.innerHTML = '';
   for (const v of voices) {
     const opt = document.createElement('option');
@@ -142,20 +143,20 @@ function populateVoices() {
   if (current) voiceSelectEl.value = current;
   else if (voices[0]) narrator.setVoiceByName(voices[0].name);
 }
-if (narrator.supported) {
+if (narrator.status().supported) {
   window.speechSynthesis.addEventListener('voiceschanged', populateVoices);
   populateVoices();
 }
 voiceSelectEl.addEventListener('change', () => narrator.setVoiceByName(voiceSelectEl.value));
 
 function applyRate(value) {
-  narrator.rate = Number(value);
-  voiceRateReadoutEl.textContent = narrator.rate.toFixed(2) + '×';
+  const state = narrator.configure({ rate: value });
+  voiceRateReadoutEl.textContent = state.rate.toFixed(2) + '×';
 }
 applyRate(voiceRateEl.value); // pick up the restored pref (or the HTML default) immediately
 voiceRateEl.addEventListener('input', () => {
   applyRate(voiceRateEl.value);
-  savePrefs({ rate: narrator.rate });
+  savePrefs({ rate: narrator.status().rate });
 });
 
 function truncateForSpeech(text, max) {
@@ -168,7 +169,7 @@ function truncateForSpeech(text, max) {
 // --- lanes ----------------------------------------------------------------
 
 function updateEmptyHint() {
-  emptyHintEl.style.display = lanes.size === 0 ? 'block' : 'none';
+  emptyHintEl.hidden = lanes.size !== 0;
 }
 
 // Custom lane names persist across reloads (sessionId -> name you typed),
@@ -413,20 +414,20 @@ function handleVoiceAndMascot(evt) {
     // CURRENT thought instead of reading a backlog of stale ones. The server
     // rewrite step (when on) also keeps each line short, so this empties out
     // fast instead of falling behind.
-    if (isFocused && speakThinkingEl.checked && narrator.pending === 0) {
+    if (isFocused && speakThinkingEl.checked && narrator.isIdle()) {
       // evt.full (added alongside the always-220-char evt.detail display
       // text) carries the real thinking block, up to lib/parse.js's 4000-char
       // ceiling, so the server-side rewrite step actually has real reasoning
       // to condense instead of an already-truncated fragment. Cap raised to
       // match: the old 350 here was a second truncation on top of the parse
       // layer's, re-creating the exact bug one layer up if left as-is.
-      narrator.say(truncateForSpeech(evt.full || evt.detail, 2000), 'thinking');
+      narrator.enqueue(truncateForSpeech(evt.full || evt.detail, 2000), 'thinking');
     }
   } else if (evt.kind === 'tool') {
     window.mascot.pulseTool(evt.label);
-    if (isFocused && speakToolsEl.checked) narrator.say('running ' + evt.label, 'tool');
+    if (isFocused && speakToolsEl.checked) narrator.enqueue('running ' + evt.label, 'tool');
   } else if (evt.kind === 'text' && isFocused) {
-    narrator.say(truncateForSpeech(evt.detail, 500), 'text');
+    narrator.enqueue(truncateForSpeech(evt.detail, 500), 'text');
   }
 }
 

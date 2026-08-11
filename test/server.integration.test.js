@@ -12,6 +12,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { stableProjectId } = require('../lib/selected-projects');
 
 const PORT = 4399; // distinct from the real app's 4317, avoids colliding with a running instance
 let serverProcess;
@@ -148,11 +149,15 @@ test('responses include browser hardening headers and auth.js is never cached', 
   const home = await request('/');
   assert.match(home.headers['content-security-policy'], /default-src 'self'/);
   assert.match(home.headers['content-security-policy'], /object-src 'none'/);
+  assert.doesNotMatch(home.headers['content-security-policy'], /unsafe-inline/);
   assert.equal(home.headers['x-content-type-options'], 'nosniff');
   assert.equal(home.headers['x-frame-options'], 'DENY');
   assert.equal(home.headers['referrer-policy'], 'no-referrer');
   assert.equal(home.headers['cache-control'], 'no-store');
   assert.equal(home.body.includes('__FAMA_TOKEN__='), false, 'index HTML must remain static under CSP');
+  assert.equal(/\sstyle=/.test(home.body), false, 'viewer HTML must not require inline styles');
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'viewer', 'settings.js'), 'utf8').includes('.style.'), false);
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'viewer', 'app.js'), 'utf8').includes('.style.'), false);
   const auth = await request('/auth.js');
   assert.equal(auth.headers['cache-control'], 'no-store');
 });
@@ -208,7 +213,7 @@ test('/events tags new Claude activity with its provider and selected project', 
     }
   );
   assert.equal(event.sessionId, 'claude-live-test');
-  assert.equal(event.projectId, '0');
+  assert.equal(event.projectId, stableProjectId(watchDir, watchDir));
   assert.equal(event.projectName, 'integration-project');
 });
 
@@ -228,7 +233,7 @@ test('/events tails Codex activity and preserves its session/project identity', 
     }
   );
   assert.equal(event.sessionId, 'codex-live-test');
-  assert.equal(event.projectId, '0');
+  assert.equal(event.projectId, stableProjectId(watchDir, watchDir));
   assert.equal(event.projectName, 'integration-project');
 });
 

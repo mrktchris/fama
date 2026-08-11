@@ -24,9 +24,10 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { FileTailer } = require('./lib/tail');
-const { voiceStyleInstructions } = require('./lib/voice-style');
 const { redactSensitiveText } = require('./lib/redact');
+const { CloudNarration, CloudNarrationError } = require('./lib/cloud-narration');
+const { LiveActivityIngest } = require('./lib/live-activity');
+const { selectedProjectsFromEnvironment } = require('./lib/selected-projects');
 
 // A fresh random token per process, required as a header on every route that
 // mutates anything or spends money. Not persisted anywhere, not needed to be:
@@ -54,10 +55,8 @@ function requireAuth(req, res) {
   res.end(JSON.stringify({ error: 'missing or invalid token' }));
   return false;
 }
-const { eventsFromRecord } = require('./lib/parse');
-const { eventsFromCodexRecord } = require('./lib/parse-codex');
 const { encodeProjectDir, claudeProjectsRoot } = require('./lib/paths');
-const { activeCodexSessions, codexSessionsRoot, findProjectForCwd } = require('./lib/codex-paths');
+const { codexSessionsRoot } = require('./lib/codex-paths');
 
 // Root cause of a real, serious incident: writeDotEnv() used to always write
 // next to server.js. That's correct for a source checkout, but for a
@@ -71,126 +70,6 @@ const { activeCodexSessions, codexSessionsRoot, findProjectForCwd } = require('.
 // source-checkout case, where that's the correct, expected place for it.
 const ENV_PATH = process.env.FAMA_ENV_PATH || path.join(__dirname, '.env');
 
-// --- tiny .env loader/writer, no dependency needed for something this small ---
-function loadDotEnv() {
-  let content;
-  try {
-    content = fs.readFileSync(ENV_PATH, 'utf8');
-  } catch {
-    return {}; // no .env, fine, cloud voice just stays off until Settings writes one
-  }
-  const values = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    let value = trimmed.slice(eq + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    values[key] = value;
-  }
-  return values;
-}
-
-function writeDotEnv(config) {
-  // Every interpolated value gets newline-stripped, not just the two that
-  // used to be: an unsanitized field here lets a value containing its own
-  // "\nOPENAI_API_KEY=..." line inject a second key that loadDotEnv's
-  // last-wins parsing would treat as authoritative. Found by security audit.
-  const clean = (v) => String(v == null ? '' : v).replace(/[\r\n]+/g, ' ');
-  const lines = [
-    '# Written by the Fama Settings panel (the gear icon in the app).',
-    '# Hand edits are fine, but hitting Save there rewrites these lines.',
-    '',
-    `OPENAI_API_KEY=${clean(config.apiKey)}`,
-    `OPENAI_TTS_MODEL=${clean(config.model || 'tts-1-hd')}`,
-    `OPENAI_TTS_VOICE=${clean(config.voice || 'alloy')}`,
-    `OPENAI_REWRITE_MODEL=${clean(config.rewriteModel || 'gpt-4o-mini')}`,
-    `OPENAI_NARRATE_REWRITE=${config.rewrite === false ? 'false' : 'true'}`,
-    `OPENAI_NARRATION_SECONDS=${config.narrationSeconds || 10}`,
-    `OPENAI_NARRATION_PERSONA=${clean(config.narrationPersona)}`,
-    `OPENAI_VOICE_STYLE=${clean(config.voiceStyle)}`,
-    '',
-  ];
-  // 0600: this file holds a plaintext API key. `mode` only applies when the
-  // file is newly created, so chmod the existing one too on every save (a
-  // no-op on Windows, where ACLs govern instead, wrapped so that's not an
-  // error there). Matters on shared POSIX machines; Windows userData is
-  // already per-user by ACL regardless.
-  fs.writeFileSync(ENV_PATH, lines.join('\n'), { encoding: 'utf8', mode: 0o600 });
-  try {
-    fs.chmodSync(ENV_PATH, 0o600);
-  } catch {
-    // not supported on Windows, fine, ACLs handle it there
-  }
-}
-
-function envBool(value, fallback) {
-  if (value === undefined || value === null || value === '') return fallback;
-  return String(value).toLowerCase() === 'true';
-}
-
-// Narration length is a continuous dial, not fixed presets, so "a lot of
-// options" just falls out of the formula: any whole second from 3 to 30 is a
-// valid target. Word count assumes a natural ~150wpm speaking rate; maxTokens
-// carries headroom so the model can actually land near the target instead of
-// getting cut off mid-sentence.
-const NARRATION_MIN_SECONDS = 3;
-const NARRATION_MAX_SECONDS = 30;
-function clampNarrationSeconds(seconds) {
-  const n = Number(seconds);
-  if (!Number.isFinite(n)) return 10;
-  return Math.min(NARRATION_MAX_SECONDS, Math.max(NARRATION_MIN_SECONDS, Math.round(n)));
-}
-function narrationPreset(seconds) {
-  const s = clampNarrationSeconds(seconds);
-  const words = Math.max(6, Math.round(s * 2.5));
-  // Generous on purpose: a few hundred extra output tokens on a model this
-  // cheap costs a rounding error, getting cut off mid-word does not. Technical
-  // vocabulary (dependencies, maintainability...) tokenizes far less
-  // efficiently than the ~1.3 tokens/word rule of thumb, 2.2x truncated real
-  // 30s output during testing, this wider margin is measured, not a guess.
-  const maxTokens = Math.round(words * 4) + 40;
-  return { seconds: s, words, maxTokens };
-}
-function clampSpeed(speed) {
-  const n = Number(speed);
-  if (!Number.isFinite(n)) return 1;
-  return Math.min(2, Math.max(0.5, n)); // OpenAI allows 0.25-4.0, keeping the UI to a sane-sounding range
-}
-
-const envFile = loadDotEnv();
-// Found live, a real bug: this used to prefer a real environment variable
-// over .env (the usual dotenv convention). On this machine a stale, already-
-// invalid OPENAI_API_KEY had been set at the Windows *user* environment
-// level months earlier (from an even older pre-Pico naming pass), and it
-// silently shadowed a genuinely valid key correctly saved through Settings,
-// on every single launch, with zero indication why the "correctly configured"
-// key kept failing. The whole point of the Settings panel is that Save
-// actually takes effect; a forgotten, unrelated OS-level env var silently
-// overriding it is a worse failure mode than losing a niche CLI-override
-// convenience. .env (what Settings actually writes) wins now; a real
-// environment variable is only used as a fallback when no .env value exists
-// at all yet, e.g. a genuine first-run CLI/CI scenario.
-let ttsConfig = {
-  apiKey: envFile.OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
-  model: envFile.OPENAI_TTS_MODEL || process.env.OPENAI_TTS_MODEL || 'tts-1-hd',
-  voice: envFile.OPENAI_TTS_VOICE || process.env.OPENAI_TTS_VOICE || 'alloy',
-  rewriteModel: envFile.OPENAI_REWRITE_MODEL || process.env.OPENAI_REWRITE_MODEL || 'gpt-4o-mini',
-  rewrite: envBool(envFile.OPENAI_NARRATE_REWRITE || process.env.OPENAI_NARRATE_REWRITE, true),
-  narrationSeconds: clampNarrationSeconds(envFile.OPENAI_NARRATION_SECONDS || process.env.OPENAI_NARRATION_SECONDS || 10),
-  // Free text, both optional and both blank by default. persona shapes the
-  // rewrite step's system prompt (works with any TTS model). voiceStyle is
-  // passed as OpenAI's "instructions" param, which only gpt-4o-mini-tts
-  // actually supports, tts-1/tts-1-hd silently ignore it if sent, so it's
-  // only sent when that model is selected, see synthesizeSpeech below.
-  narrationPersona: envFile.OPENAI_NARRATION_PERSONA || process.env.OPENAI_NARRATION_PERSONA || '',
-  voiceStyle: envFile.OPENAI_VOICE_STYLE || process.env.OPENAI_VOICE_STYLE || '',
-};
-
 // --- usage / spend tracking, local only, persisted to usage.json (gitignored) ---
 // Same class of bug as the .env write-path incident, found by the same
 // external audit: this defaulted to path.join(__dirname, ...), which for a
@@ -201,54 +80,10 @@ let ttsConfig = {
 // every build if a real one existed in the source tree. FAMA_USAGE_PATH lets
 // the desktop shell point this at app.getPath('userData'), matching FAMA_ENV_PATH.
 const USAGE_PATH = process.env.FAMA_USAGE_PATH || path.join(__dirname, 'usage.json');
-// Best-effort $ estimates, labelled as such in the UI rather than presented
-// as exact. tts-1/tts-1-hd are flat per-character billing, confirmed against
-// OpenAI's own pricing. gpt-4o-mini-tts bills audio output at roughly
-// $12/1M units against the same pricing page (plus a separate, much smaller
-// per-token text-input charge this doesn't model, narration lines are short
-// enough that it's noise next to the output cost) — approximated here at
-// that output rate rather than reused from tts-1, closer to the real number
-// but still an approximation: OpenAI's own docs describe this billing
-// structure ambiguously (character vs. token unit) even cross-referenced
-// against two of their own pages, so this is not asserted as exact.
-const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000012 };
-const REWRITE_PRICE_PER_TOKEN = { prompt: 0.00000015, completion: 0.0000006 }; // gpt-4o-mini, $0.15 / $0.60 per 1M
-
-function loadUsage() {
-  try {
-    return JSON.parse(fs.readFileSync(USAGE_PATH, 'utf8'));
-  } catch {
-    return { totalCost: 0, ttsCalls: 0, ttsChars: 0, rewriteCalls: 0, rewriteTokens: 0, since: new Date().toISOString() };
-  }
-}
-let usage = loadUsage();
-function saveUsage() {
-  try {
-    fs.writeFileSync(USAGE_PATH, JSON.stringify(usage, null, 2), 'utf8');
-  } catch {
-    // non-fatal, worst case usage just isn't persisted across a restart
-  }
-}
-function recordUsage({ ttsChars, ttsModel, rewritePromptTokens, rewriteCompletionTokens }) {
-  const ttsPrice = PRICE_PER_CHAR[ttsModel] || PRICE_PER_CHAR['tts-1-hd'];
-  let cost = (ttsChars || 0) * ttsPrice;
-  usage.ttsCalls += 1;
-  usage.ttsChars += ttsChars || 0;
-  if (rewritePromptTokens || rewriteCompletionTokens) {
-    cost += (rewritePromptTokens || 0) * REWRITE_PRICE_PER_TOKEN.prompt + (rewriteCompletionTokens || 0) * REWRITE_PRICE_PER_TOKEN.completion;
-    usage.rewriteCalls += 1;
-    usage.rewriteTokens += (rewritePromptTokens || 0) + (rewriteCompletionTokens || 0);
-  }
-  usage.totalCost += cost;
-  saveUsage();
-}
-
+const cloudNarration = new CloudNarration({ envPath: ENV_PATH, usagePath: USAGE_PATH, env: process.env });
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4317;
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000; // a session file counts as "active" if touched in the last 15 min
 const POLL_MS = 250; // how often we check transcripts for new lines, kept tight on purpose, see README
-const BACKLOG_SIZE = 300;
-const BACKLOG_MAX_BYTES = 2 * 1024 * 1024;
-const MAX_SPEECH_CHARS = 900; // hard backstop, comfortably above even the 20s preset's typical output
 
 function resolveWatchDir() {
   if (process.env.CLAUDE_NARRATOR_DIR) return process.env.CLAUDE_NARRATOR_DIR;
@@ -256,249 +91,25 @@ function resolveWatchDir() {
   return path.join(claudeProjectsRoot(), encoded);
 }
 
-// Multiple projects at once: the desktop shell passes JSON arrays of Claude
-// transcript dirs, real project roots, and friendly labels (see
-// desktop/main.js). The real roots let global Codex sessions be matched to a
-// selected project without surfacing unrelated activity. CLI mode (no
-// Electron) watches the project it was launched from. Each project gets a
-// stable id used to tag every event and group lanes client-side.
 function resolveWatchProjects() {
-  if (process.env.CLAUDE_NARRATOR_DIRS) {
-    let dirs, labels, cwds;
-    try {
-      dirs = JSON.parse(process.env.CLAUDE_NARRATOR_DIRS);
-      labels = process.env.FAMA_PROJECT_LABELS ? JSON.parse(process.env.FAMA_PROJECT_LABELS) : [];
-      cwds = process.env.FAMA_PROJECT_CWDS ? JSON.parse(process.env.FAMA_PROJECT_CWDS) : [];
-    } catch {
-      dirs = [];
-    }
-    if (Array.isArray(dirs) && dirs.length) {
-      return dirs.map((dir, i) => ({ id: String(i), dir, cwd: cwds[i] || null, name: labels[i] || path.basename(dir) }));
-    }
-  }
-  // Single-project fallback: env override or the cwd-derived default.
-  const dir = resolveWatchDir();
-  const name = process.env.FAMA_PROJECT_LABEL || path.basename(process.cwd());
-  const cwd = process.env.FAMA_PROJECT_CWD || process.cwd();
-  return [{ id: '0', dir, cwd, name }];
+  return selectedProjectsFromEnvironment(process.env, {
+    dir: resolveWatchDir(),
+    cwd: process.env.FAMA_PROJECT_CWD || process.cwd(),
+    name: process.env.FAMA_PROJECT_LABEL || path.basename(process.cwd()),
+  });
 }
 
 const watchProjects = resolveWatchProjects();
-
-const backlog = [];
-let backlogBytes = 0;
-const sseClients = new Set();
-const tailers = new Map(); // filePath -> FileTailer
-
-function broadcast(event) {
-  const payload = `data: ${JSON.stringify(event)}\n\n`;
-  const bytes = Buffer.byteLength(payload);
-  backlog.push({ payload, bytes });
-  backlogBytes += bytes;
-  while (backlog.length > 1 && (backlog.length > BACKLOG_SIZE || backlogBytes > BACKLOG_MAX_BYTES)) {
-    backlogBytes -= backlog.shift().bytes;
-  }
-  for (const res of sseClients) res.write(payload);
-}
-
-function handleClaudeRecords(records, project) {
-  for (const record of records) {
-    for (const event of eventsFromRecord(record)) {
-      broadcast(Object.assign(event, { provider: 'claude', projectId: project.id, projectName: project.name }));
-    }
-  }
-}
-
-function handleCodexRecords(records, project, context) {
-  for (const record of records) {
-    // Keep this defensive for transcripts discovered while their first line
-    // is still being written. Once session_meta arrives, every later event
-    // receives the same stable session id.
-    if (record && record.type === 'session_meta' && record.payload) {
-      context.sessionId = record.payload.id || record.payload.session_id || context.sessionId;
-    }
-    for (const event of eventsFromCodexRecord(record, context)) {
-      broadcast(Object.assign(event, { provider: 'codex', projectId: project.id, projectName: project.name }));
-    }
-  }
-}
-
-function scanForActiveClaudeSessions(now) {
-  const seen = new Set();
-  for (const project of watchProjects) {
-    let entries;
-    try {
-      entries = fs.readdirSync(project.dir, { withFileTypes: true });
-    } catch (err) {
-      continue; // this watch dir doesn't exist yet (brand new project, no sessions written yet)
-    }
-    for (const entry of entries) {
-      // Only top-level *.jsonl. Subagent transcripts live in a nested subagents/
-      // folder and are deliberately skipped in v0.1 (see README roadmap).
-      if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
-      const filePath = path.join(project.dir, entry.name);
-      let stat;
-      try {
-        stat = fs.statSync(filePath);
-      } catch {
-        continue;
-      }
-      if (now - stat.mtimeMs > ACTIVE_WINDOW_MS) continue; // stale session, not currently active
-      seen.add(filePath);
-      if (!tailers.has(filePath)) {
-        const tailer = new FileTailer(filePath, (records) => handleClaudeRecords(records, project));
-        // Seed at end-of-file: on startup we only stream what happens FROM NOW ON.
-        // Files that already existed keep their history out of the feed on purpose,
-        // this is a live narrator, not a replay tool.
-        tailer.offset = stat.size;
-        tailers.set(filePath, tailer);
-      }
-    }
-  }
-  return seen;
-}
-
 const CODEX_DISCOVERY_MS = 1000;
 const CODEX_SESSIONS_DIR = process.env.FAMA_CODEX_SESSIONS_DIR || codexSessionsRoot();
-let lastCodexDiscoveryAt = 0;
-let activeCodexPaths = new Set();
-
-function scanForActiveCodexSessions(now) {
-  const seen = new Set();
-  for (const session of activeCodexSessions(CODEX_SESSIONS_DIR, { now, activeWindowMs: ACTIVE_WINDOW_MS })) {
-    const project = findProjectForCwd(watchProjects, session.cwd);
-    if (!project) continue; // never surface activity from an unselected project
-    seen.add(session.filePath);
-    if (!tailers.has(session.filePath)) {
-      const context = { sessionId: session.sessionId };
-      const tailer = new FileTailer(session.filePath, (records) => handleCodexRecords(records, project, context));
-      // Same live-only rule as Claude sessions: history before Fama starts is
-      // not replayed, only bytes appended after discovery are broadcast.
-      tailer.offset = session.size;
-      tailers.set(session.filePath, tailer);
-    }
-  }
-  return seen;
-}
-
-function scanForActiveSessions() {
-  const now = Date.now();
-  const seenThisScan = scanForActiveClaudeSessions(now);
-  // Codex history is a recursive date hierarchy rather than one directory
-  // per project. Discovering files less often avoids walking that tree four
-  // times a second; once found, each FileTailer still polls at the normal
-  // 250ms cadence, so live event latency stays unchanged.
-  if (now - lastCodexDiscoveryAt >= CODEX_DISCOVERY_MS) {
-    activeCodexPaths = scanForActiveCodexSessions(now);
-    lastCodexDiscoveryAt = now;
-  }
-  for (const filePath of activeCodexPaths) seenThisScan.add(filePath);
-  // Tailers used to only ever get added, never removed, so a long-running
-  // process (the whole point of the tray icon) would keep statSync/open/poll
-  // cycling on every session it had ever seen go active, forever. Anything
-  // that aged out of the active window this scan gets dropped.
-  for (const filePath of tailers.keys()) {
-    if (!seenThisScan.has(filePath)) tailers.delete(filePath);
-  }
-}
-
-setInterval(() => {
-  scanForActiveSessions();
-  for (const tailer of tailers.values()) tailer.poll();
-}, POLL_MS);
-scanForActiveSessions();
-
-// --- optional cloud voice: rewrite + text-to-speech (OpenAI) ---------------
-
-const PROVIDER_TIMEOUT_MS = 30000;
-
-function providerErrorMessage(err) {
-  let message = redactSensitiveText(String((err && err.message) || err || 'unknown provider error'));
-  if (ttsConfig.apiKey) message = message.split(ttsConfig.apiKey).join('[redacted credential]');
-  return message.replace(/[\r\n]+/g, ' ').slice(0, 300);
-}
-
-async function rewriteForSpeech(text, kind) {
-  const context =
-    kind === 'thinking'
-      ? 'This is raw internal reasoning, often fragmented or rambling as it is being worked out.'
-      : 'This is already meant to be read by a person, just make it work as spoken audio.';
-  const preset = narrationPreset(ttsConfig.narrationSeconds);
-  const personaLine = ttsConfig.narrationPersona
-    ? `Voice/persona for this rewrite: ${ttsConfig.narrationPersona}. Stay in that voice, but the length limit below is non-negotiable regardless of persona. `
-    : '';
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${ttsConfig.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: ttsConfig.rewriteModel,
-      messages: [
-        {
-          role: 'system',
-          content:
-            "You narrate a coding agent's live activity out loud, in real time, for someone half-listening while they work on something else. " +
-            personaLine +
-            `HARD LIMIT: ${preset.words} words maximum, count them as you write and stop at the limit even mid-thought. ` +
-            'Present tense, natural spoken sentences. ' +
-            'Never start with a filler opener like "So", "Well", "Okay so", "Now", or "Alright", get straight into the actual content. ' +
-            'No code, no file paths, no markdown, no meta-commentary about what you are doing right now, just the plain-language gist of it. ' +
-            'Reply with only the rewritten line and nothing else.',
-        },
-        { role: 'user', content: `${context}\n\nRewrite this in ${preset.words} words or fewer:\n\n${text}` },
-      ],
-      max_tokens: preset.maxTokens,
-      temperature: 0.2,
-    }),
-    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-  });
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`OpenAI rewrite ${resp.status}: ${errText.slice(0, 200)}`);
-  }
-  const data = await resp.json();
-  const out = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  const u = data && data.usage;
-  return { text: (out || '').trim(), promptTokens: (u && u.prompt_tokens) || 0, completionTokens: (u && u.completion_tokens) || 0 };
-}
-
-async function synthesizeSpeech(text, speed) {
-  const payload = {
-    model: ttsConfig.model,
-    voice: ttsConfig.voice,
-    input: text,
-    response_format: 'mp3',
-    speed: clampSpeed(speed),
-  };
-  // instructions (accent, tone, delivery) is only honored by gpt-4o-mini-tts.
-  // tts-1/tts-1-hd are older fixed-delivery models, sending it there either
-  // gets silently ignored or rejected depending on the day, so just don't.
-  //
-  // A bare word or two ("dominican", "calm") measurably under-steers the
-  // model, confirmed by testing: a one-word instruction came back byte-
-  // identical to no instruction at all, a fuller sentence did not. So short
-  // input gets expanded into an actual directive rather than sent as-is,
-  // the field stays free text, this just gives the model more to act on.
-  if (ttsConfig.voiceStyle && ttsConfig.model === 'gpt-4o-mini-tts') {
-    payload.instructions = voiceStyleInstructions(ttsConfig.voiceStyle);
-  }
-  const resp = await fetch('https://api.openai.com/v1/audio/speech', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${ttsConfig.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-  });
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => '');
-    throw new Error(`OpenAI TTS ${resp.status}: ${errText.slice(0, 200)}`);
-  }
-  return Buffer.from(await resp.arrayBuffer());
-}
+const liveActivity = new LiveActivityIngest({
+  projects: watchProjects,
+  codexSessionsDir: CODEX_SESSIONS_DIR,
+  activeWindowMs: ACTIVE_WINDOW_MS,
+  codexDiscoveryMs: CODEX_DISCOVERY_MS,
+  pollMs: POLL_MS,
+});
+liveActivity.start();
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -521,22 +132,6 @@ function readJsonBody(req) {
   });
 }
 
-function publicConfig() {
-  return {
-    cloudVoice: Boolean(ttsConfig.apiKey),
-    model: ttsConfig.model,
-    voice: ttsConfig.voice,
-    rewrite: ttsConfig.rewrite,
-    rewriteModel: ttsConfig.rewriteModel,
-    narrationSeconds: ttsConfig.narrationSeconds,
-    narrationMin: NARRATION_MIN_SECONDS,
-    narrationMax: NARRATION_MAX_SECONDS,
-    narrationPersona: ttsConfig.narrationPersona,
-    voiceStyle: ttsConfig.voiceStyle,
-    voiceStyleSupported: ttsConfig.model === 'gpt-4o-mini-tts',
-  };
-}
-
 // --- http server ------------------------------------------------------
 
 const viewerDir = path.join(__dirname, 'viewer');
@@ -544,7 +139,7 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self'",
   "img-src 'self' data:",
   "media-src 'self' blob:",
   "connect-src 'self'",
@@ -611,17 +206,16 @@ const server = http.createServer((req, res) => {
         projects: watchProjects.map((p) => ({ id: p.id, name: p.name })),
       })}\n\n`
     );
-    for (const item of backlog) res.write(item.payload);
-    sseClients.add(res);
-    req.on('close', () => sseClients.delete(res));
+    const unsubscribe = liveActivity.subscribe(res);
+    req.on('close', unsubscribe);
     return;
   }
 
-  // Never echoes ttsConfig.apiKey back, only whether one is set. The browser
-  // never needs the real value, and never gets it after Settings saves one.
+  // The Cloud Narration Interface exposes only whether a key exists; the raw
+  // credential never crosses into the browser.
   if (requestPath === '/config' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(publicConfig()));
+    res.end(JSON.stringify(cloudNarration.publicConfig()));
     return;
   }
 
@@ -643,14 +237,13 @@ const server = http.createServer((req, res) => {
 
   if (requestPath === '/usage' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(usage));
+    res.end(JSON.stringify(cloudNarration.usage()));
     return;
   }
 
   if (requestPath === '/usage/reset' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
-    usage = { totalCost: 0, ttsCalls: 0, ttsChars: 0, rewriteCalls: 0, rewriteTokens: 0, since: new Date().toISOString() };
-    saveUsage();
+    const usage = cloudNarration.resetUsage();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(usage));
     return;
@@ -660,32 +253,9 @@ const server = http.createServer((req, res) => {
     if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then((body) => {
-        // Strips interior newlines too, not just leading/trailing whitespace:
-        // .trim() alone left a value like "tts-1\nOPENAI_API_KEY=..." able to
-        // inject a second line once written to .env. writeDotEnv sanitizes on
-        // the way out regardless, this additionally keeps ttsConfig itself
-        // (used live for real OpenAI calls) from ever holding one in memory.
-        const noNewlines = (s) => s.replace(/[\r\n]+/g, ' ').trim();
-        const typedKey = typeof body.apiKey === 'string' ? noNewlines(body.apiKey) : '';
-        const model = typeof body.model === 'string' && body.model.trim() ? noNewlines(body.model) : ttsConfig.model;
-        const voice = typeof body.voice === 'string' && body.voice.trim() ? noNewlines(body.voice) : ttsConfig.voice;
-        const rewriteModel =
-          typeof body.rewriteModel === 'string' && body.rewriteModel.trim() ? noNewlines(body.rewriteModel) : ttsConfig.rewriteModel;
-        const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : ttsConfig.rewrite;
-        const narrationSeconds =
-          body.narrationSeconds !== undefined ? clampNarrationSeconds(body.narrationSeconds) : ttsConfig.narrationSeconds;
-        const narrationPersona = typeof body.narrationPersona === 'string' ? body.narrationPersona.trim().slice(0, 500) : ttsConfig.narrationPersona;
-        const voiceStyle = typeof body.voiceStyle === 'string' ? body.voiceStyle.trim().slice(0, 500) : ttsConfig.voiceStyle;
-        const clearKey = body.clearKey === true;
-        // A blank key field means "leave whatever's already saved alone", not
-        // "erase it", the only way to actually clear it is the explicit flag.
-        const apiKey = clearKey ? '' : typedKey || ttsConfig.apiKey;
-
-        ttsConfig = { apiKey, model, voice, rewriteModel, rewrite, narrationSeconds, narrationPersona, voiceStyle };
-        writeDotEnv(ttsConfig);
-
+        const config = cloudNarration.updateSettings(body);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(Object.assign({ ok: true }, publicConfig())));
+        res.end(JSON.stringify(Object.assign({ ok: true }, config)));
       })
       .catch(() => {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -698,63 +268,21 @@ const server = http.createServer((req, res) => {
     if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then(async (body) => {
-        const rawText = redactSensitiveText(body && body.text ? String(body.text) : '').slice(0, MAX_SPEECH_CHARS);
-        const kind = body && ['thinking', 'text', 'tool'].includes(body.kind) ? body.kind : 'text';
-        const speechSpeed = clampSpeed(body && body.speed);
-        if (!rawText) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'no text' }));
-          return;
-        }
-        if (!ttsConfig.apiKey) {
-          res.writeHead(501, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'no OpenAI key configured, use the free browser voice instead' }));
-          return;
-        }
-
-        let spokenText = rawText;
-        let rewriteUsage = null;
-        // A full rewrite round-trip (a real, non-streamed chat-completion call,
-        // typically 0.5-2s on its own) has nothing to actually condense when
-        // the raw text is already at or under the target length — skipping it
-        // for those lines is a pure latency win, one full network hop cut,
-        // with zero quality tradeoff, since there was nothing to shorten.
-        const alreadyShort = rawText.trim().split(/\s+/).length <= narrationPreset(ttsConfig.narrationSeconds).words;
-        const shouldRewrite = ttsConfig.rewrite && (kind === 'thinking' || kind === 'text') && !alreadyShort;
-        if (shouldRewrite) {
-          try {
-            const result = await rewriteForSpeech(rawText, kind);
-            if (result.text) spokenText = redactSensitiveText(result.text).slice(0, MAX_SPEECH_CHARS);
-            rewriteUsage = result;
-          } catch (err) {
-            // rewrite hiccuped, speak the raw text rather than drop the line
-          }
-        }
-
         try {
+          const result = await cloudNarration.speak(body || {});
           console.log(
-            `[speak] kind=${kind} chars=${spokenText.length} speed=${speechSpeed} model=${ttsConfig.model} narrationSeconds=${ttsConfig.narrationSeconds}`
+            `[speak] kind=${result.kind} chars=${result.spokenText.length} speed=${result.speed} model=${result.model} narrationSeconds=${result.narrationSeconds}`
           );
-          const audio = await synthesizeSpeech(spokenText, speechSpeed);
-          recordUsage({
-            ttsChars: spokenText.length,
-            ttsModel: ttsConfig.model,
-            rewritePromptTokens: rewriteUsage ? rewriteUsage.promptTokens : 0,
-            rewriteCompletionTokens: rewriteUsage ? rewriteUsage.completionTokens : 0,
-          });
           res.writeHead(200, {
             'Content-Type': 'audio/mpeg',
-            'Content-Length': audio.length,
+            'Content-Length': result.audio.length,
           });
-          res.end(audio);
+          res.end(result.audio);
         } catch (err) {
-          // Found by audit: OpenAI's own error text can embed a masked
-          // fragment of the key that was sent (e.g. on an invalid/revoked
-          // key). That's fine to log locally, not fine to echo back over
-          // the HTTP response, which is visible to devtools/Network tab.
-          console.error(`[speak] failed: ${providerErrorMessage(err)}`);
-          res.writeHead(502, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'speech synthesis failed, see server log for detail' }));
+          const known = err instanceof CloudNarrationError;
+          if (!known || err.status >= 500) console.error(`[speak] failed: ${cloudNarration.providerErrorMessage(err)}`);
+          res.writeHead(known ? err.status : 502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: known ? err.publicMessage : 'speech synthesis failed, see server log for detail' }));
         }
       })
       .catch(() => {
@@ -818,12 +346,6 @@ server.on('error', (err) => {
 // output, it has no business being reachable from anything else on the LAN.
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Fama watching: ${watchProjects.map((p) => `${p.name} (${p.dir})`).join(', ')}`);
-  console.log(
-    `voice: ${
-      ttsConfig.apiKey
-        ? `OpenAI (${ttsConfig.model}, ${ttsConfig.voice}), rewrite ${ttsConfig.rewrite ? `on (~${ttsConfig.narrationSeconds}s)` : 'off'}`
-        : 'free browser voice (no key configured)'
-    }`
-  );
+  console.log(`voice: ${cloudNarration.describe()}`);
   console.log(`open http://localhost:${PORT}`);
 });

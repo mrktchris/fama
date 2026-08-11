@@ -99,5 +99,10 @@ continueBtn.addEventListener('click', () => {
   if (!checkedEncoded.size) return;
   continueBtn.disabled = true;
   continueBtn.textContent = 'Starting…';
-  window.famaSetup.confirmProjects([...checkedEncoded]);
+  window.famaSetup.confirmProjects(
+    [...checkedEncoded].map((encoded) => {
+      const project = known.get(encoded);
+      return project ? { encoded, path: project.path } : { encoded };
+    })
+  );
 });

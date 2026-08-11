@@ -52,7 +52,7 @@
 
   <main id="lanes"></main>
 
-  <div id="empty-hint">
+  <div id="empty-hint" hidden>
     <div class="empty-icon">&#127908;</div>
     <p>No active sessions yet.</p>
     <p class="empty-sub">Start or continue a Claude Code or Codex session in this project. It shows up here within a second, and reads itself out loud once voice is on.</p>
@@ -169,11 +169,11 @@
         <label class="settings-field">
           <span>Accent color</span>
           <div class="swatch-row" id="accent-swatches">
-            <button type="button" class="swatch" data-accent="#7c9dff" data-glow="124, 157, 255" title="Aurora blue (default)" style="background:#7c9dff"></button>
-            <button type="button" class="swatch" data-accent="#8b7cff" data-glow="139, 124, 255" title="Crystal iris" style="background:#8b7cff"></button>
-            <button type="button" class="swatch" data-accent="#6ee7f2" data-glow="110, 231, 242" title="Aether cyan" style="background:#6ee7f2"></button>
-            <button type="button" class="swatch" data-accent="#c6b7ff" data-glow="198, 183, 255" title="Moon lilac" style="background:#c6b7ff"></button>
-            <button type="button" class="swatch" data-accent="#ffd39a" data-glow="255, 211, 154" title="Dawn gold" style="background:#ffd39a"></button>
+            <button type="button" class="swatch" data-theme="aurora" data-accent="#7c9dff" title="Aurora blue (default)"></button>
+            <button type="button" class="swatch" data-theme="iris" data-accent="#8b7cff" title="Crystal iris"></button>
+            <button type="button" class="swatch" data-theme="aether" data-accent="#6ee7f2" title="Aether cyan"></button>
+            <button type="button" class="swatch" data-theme="moon" data-accent="#c6b7ff" title="Moon lilac"></button>
+            <button type="button" class="swatch" data-theme="dawn" data-accent="#ffd39a" title="Dawn gold"></button>
           </div>
         </label>
 

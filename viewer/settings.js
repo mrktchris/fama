@@ -12,20 +12,20 @@
   // client-only prefs (voice, thinking/tools toggles, lane names).
   const ACCENT_KEY = 'fama.accent';
   const swatches = document.querySelectorAll('#accent-swatches .swatch');
-  function applyAccent(hex, glowRgb) {
-    document.documentElement.style.setProperty('--accent', hex);
-    document.documentElement.style.setProperty('--accent-glow', `rgba(${glowRgb}, 0.35)`);
+  function applyAccent(hex) {
+    const selected = Array.from(swatches).find((s) => s.dataset.accent === hex) || swatches[0];
+    document.documentElement.dataset.accent = selected ? selected.dataset.theme : 'aurora';
     swatches.forEach((s) => s.classList.toggle('active', s.dataset.accent === hex));
   }
   swatches.forEach((swatch) => {
     swatch.addEventListener('click', () => {
-      applyAccent(swatch.dataset.accent, swatch.dataset.glow);
-      localStorage.setItem(ACCENT_KEY, JSON.stringify({ hex: swatch.dataset.accent, glow: swatch.dataset.glow }));
+      applyAccent(swatch.dataset.accent);
+      localStorage.setItem(ACCENT_KEY, JSON.stringify({ hex: swatch.dataset.accent }));
     });
   });
   try {
     const saved = JSON.parse(localStorage.getItem(ACCENT_KEY));
-    if (saved && saved.hex) applyAccent(saved.hex, saved.glow);
+    if (saved && saved.hex) applyAccent(saved.hex);
     else swatches[0] && swatches[0].classList.add('active'); // aurora blue default, matches the CSS default already in place
   } catch {
     swatches[0] && swatches[0].classList.add('active');
@@ -37,8 +37,10 @@
   const FEED_SIZE_KEY = 'fama.feed-size';
   const sizeChips = document.querySelectorAll('#feed-size-row .preset-chip');
   function applyFeedSize(size) {
-    document.documentElement.style.setProperty('--feed-font-size', size);
-    sizeChips.forEach((c) => c.classList.toggle('active', c.dataset.size === size));
+    const allowed = new Set(Array.from(sizeChips, (chip) => chip.dataset.size));
+    const selected = allowed.has(size) ? size : '12px';
+    document.documentElement.dataset.feedSize = selected;
+    sizeChips.forEach((c) => c.classList.toggle('active', c.dataset.size === selected));
   }
   sizeChips.forEach((chip) => {
     chip.addEventListener('click', () => {
@@ -319,13 +321,13 @@
     // currently typed in the form, a control that silently contradicted its
     // own label. Now it saves first (same as clicking Save) so what you hear
     // always matches what's on screen when you click it.
-    if (!window.narrator.enabled) window.narrator.enable();
+    if (!window.narrator.status().enabled) window.narrator.enable();
     const sample =
       "So I'm thinking about whether to use approach A or approach B here, and honestly A seems cleaner " +
       'since it avoids the extra dependency, but let me actually double check that before committing to it.';
     saveSettings().then((saved) => {
       if (!saved) return;
-      window.narrator.say(sample, 'thinking');
+      window.narrator.enqueue(sample, 'thinking');
       setTimeout(refreshUsage, 3000); // rough guess at when the call has actually landed
     });
   });
