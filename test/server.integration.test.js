@@ -12,8 +12,9 @@ const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { stableProjectId } = require('../lib/selected-projects');
 
-const PORT = 4399; // distinct from the real app's 4317, avoids colliding with a running instance
+let port;
 let serverProcess;
 let authToken;
 let watchDir;
@@ -25,7 +26,7 @@ function request(urlPath, options = {}) {
     const req = http.request(
       {
         hostname: options.host || '127.0.0.1',
-        port: PORT,
+        port,
         path: urlPath,
         method: options.method || 'GET',
         headers: options.headers || {},
@@ -39,6 +40,17 @@ function request(urlPath, options = {}) {
     req.on('error', reject);
     if (options.body) req.write(options.body);
     req.end();
+  });
+}
+
+function reserveEphemeralPort() {
+  return new Promise((resolve, reject) => {
+    const probe = http.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      probe.close((error) => (error ? reject(error) : resolve(address.port)));
+    });
   });
 }
 
@@ -62,7 +74,7 @@ function waitForSseEvent(predicate, trigger) {
       reject(new Error('timed out waiting for SSE event'));
     }, 5000);
     const req = http.request(
-      { hostname: '127.0.0.1', port: PORT, path: '/events', method: 'GET' },
+      { hostname: '127.0.0.1', port, path: '/events', method: 'GET' },
       (res) => {
         response = res;
         res.setEncoding('utf8');
@@ -117,9 +129,13 @@ before(async () => {
     `${JSON.stringify({ timestamp: '2026-08-11T00:00:00Z', type: 'session_meta', payload: { id: 'codex-live-test', cwd: watchDir } })}\n`,
     'utf8'
   );
+  // A fixed test port made concurrent Claude/Codex audits interfere: one run
+  // could connect to a stale child while its own server exited on EADDRINUSE.
+  // Reserve an OS-selected port per process, then wait for teardown below.
+  port = await reserveEphemeralPort();
   serverProcess = spawn('node', [path.join(__dirname, '..', 'server.js')], {
     env: Object.assign({}, process.env, {
-      PORT: String(PORT),
+      PORT: String(port),
       CLAUDE_NARRATOR_DIR: watchDir,
       FAMA_PROJECT_CWD: watchDir,
       FAMA_PROJECT_LABEL: 'integration-project',
@@ -135,12 +151,16 @@ before(async () => {
   authToken = match[1];
 });
 
-after(() => {
-  if (serverProcess) serverProcess.kill();
+after(async () => {
+  if (!serverProcess || serverProcess.exitCode !== null) return;
+  await new Promise((resolve) => {
+    serverProcess.once('exit', resolve);
+    serverProcess.kill();
+  });
 });
 
 test('legitimate Host header: / returns 200', async () => {
-  const res = await request('/', { headers: { Host: `127.0.0.1:${PORT}` } });
+  const res = await request('/', { headers: { Host: `127.0.0.1:${port}` } });
   assert.equal(res.status, 200);
 });
 
@@ -148,11 +168,15 @@ test('responses include browser hardening headers and auth.js is never cached', 
   const home = await request('/');
   assert.match(home.headers['content-security-policy'], /default-src 'self'/);
   assert.match(home.headers['content-security-policy'], /object-src 'none'/);
+  assert.doesNotMatch(home.headers['content-security-policy'], /unsafe-inline/);
   assert.equal(home.headers['x-content-type-options'], 'nosniff');
   assert.equal(home.headers['x-frame-options'], 'DENY');
   assert.equal(home.headers['referrer-policy'], 'no-referrer');
   assert.equal(home.headers['cache-control'], 'no-store');
   assert.equal(home.body.includes('__FAMA_TOKEN__='), false, 'index HTML must remain static under CSP');
+  assert.equal(/\sstyle=/.test(home.body), false, 'viewer HTML must not require inline styles');
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'viewer', 'settings.js'), 'utf8').includes('.style.'), false);
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'viewer', 'app.js'), 'utf8').includes('.style.'), false);
   const auth = await request('/auth.js');
   assert.equal(auth.headers['cache-control'], 'no-store');
 });
@@ -189,6 +213,10 @@ test('/config never echoes the real API key, only whether one is set', async () 
   assert.equal(typeof cfg.cloudVoice, 'boolean');
   assert.ok(!('apiKey' in cfg), '/config response must never include the raw key field');
   assert.ok(!res.body.includes('sk-'), '/config response body must never contain anything key-shaped');
+  assert.deepEqual(cfg.models.map((model) => model.id), ['gpt-4o-mini-tts', 'tts-1', 'tts-1-hd']);
+  assert.equal(cfg.models[0].voiceStyleSupported, true);
+  assert.deepEqual(cfg.voices, ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']);
+  assert.equal(cfg.narrationEstimate.wordsPerSecond, 2.5);
 });
 
 test('/events tags new Claude activity with its provider and selected project', async () => {
@@ -208,7 +236,7 @@ test('/events tags new Claude activity with its provider and selected project', 
     }
   );
   assert.equal(event.sessionId, 'claude-live-test');
-  assert.equal(event.projectId, '0');
+  assert.equal(event.projectId, stableProjectId(watchDir, watchDir));
   assert.equal(event.projectName, 'integration-project');
 });
 
@@ -228,7 +256,7 @@ test('/events tails Codex activity and preserves its session/project identity', 
     }
   );
   assert.equal(event.sessionId, 'codex-live-test');
-  assert.equal(event.projectId, '0');
+  assert.equal(event.projectId, stableProjectId(watchDir, watchDir));
   assert.equal(event.projectName, 'integration-project');
 });
 
@@ -244,6 +272,10 @@ test('static file serving rejects path traversal', async () => {
 test('static files support query strings and reject non-read methods', async () => {
   const withQuery = await request('/index.html?cache-bust=1');
   assert.equal(withQuery.status, 200);
+  assert.match(withQuery.headers['content-type'], /^text\/html; charset=utf-8$/);
+  const generatedIdentity = await request('/identity-signal.png');
+  assert.equal(generatedIdentity.status, 200);
+  assert.equal(generatedIdentity.headers['content-type'], 'image/png');
   const post = await request('/style.css', { method: 'POST' });
   assert.equal(post.status, 405);
   assert.equal(post.headers.allow, 'GET, HEAD');

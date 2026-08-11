@@ -3,6 +3,7 @@ node_modules/
 run.pid
 electron.pid
 dist-desktop/
+coverage/
 .env
 .env.*
 !.env.example

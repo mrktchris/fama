@@ -50,9 +50,11 @@ const SECRET_PATTERNS = [
   { name: 'Google API key', re: /AIza[0-9A-Za-z_-]{30,}/ },
   { name: 'Private key block', re: /-----BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/ },
 ];
-// Only scan text-ish files for secrets; scanning 100MB of Electron binaries is
-// pointless (and slow). A secret that matters here arrives as text.
-const TEXT_EXT = new Set(['.js', '.json', '.md', '.txt', '.env', '.example', '.html', '.css', '.yml', '.yaml', '.ps1', '.sh', '']);
+// Only scan text-like application files and ASAR archives. Treating every
+// extensionless file as text accidentally scans the ELF/Mach-O Electron
+// executable on Linux/macOS, where arbitrary bytes can resemble a provider
+// token. Forbidden filenames and directories are still checked for every file.
+const TEXT_EXT = new Set(['.js', '.json', '.md', '.txt', '.env', '.example', '.html', '.css', '.yml', '.yaml', '.ps1', '.sh', '.asar']);
 const SCAN_CHUNK_BYTES = 1024 * 1024;
 const SCAN_OVERLAP_BYTES = 4096;
 

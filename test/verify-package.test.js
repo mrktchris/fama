@@ -51,3 +51,23 @@ test('package verifier accepts a clean large text artifact', (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /no secrets or forbidden files found/);
 });
+
+test('package verifier does not interpret an extensionless platform binary as UTF-8 text', (t) => {
+  const { root } = packageFixture(t);
+  const executable = path.join(root, 'Fama-win32-x64', 'fama');
+  const coincidentalBytes = Buffer.from(`\u007fELF\0random-sk-${'A'.repeat(32)}-bytes\0`, 'utf8');
+  fs.writeFileSync(executable, coincidentalBytes);
+
+  const result = verify(root);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('package verifier still scans an ASAR archive for embedded secrets', (t) => {
+  const { root, app } = packageFixture(t);
+  const resources = path.dirname(app);
+  fs.writeFileSync(path.join(resources, 'app.asar'), `archive-content-sk-${'A'.repeat(32)}`);
+
+  const result = verify(root);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /SECRET \(OpenAI API key\)/);
+});

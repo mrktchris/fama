@@ -80,3 +80,15 @@ test('Narrator.stop aborts cloud work without falling back to stale local speech
   assert.deepEqual(spoken.filter(Boolean), []);
   assert.equal(narrator.pending, 0);
 });
+
+test('Narrator exposes configuration and state through its Interface', async () => {
+  const { Narrator } = loadNarrator();
+  const narrator = new Narrator();
+  await narrator.ready;
+  const state = narrator.configure({ rate: 8, onStateChange() {} });
+  assert.equal(state.rate, 2);
+  assert.equal(state.cloudVoice, true);
+  assert.equal(state.enabled, false);
+  assert.equal(narrator.isIdle(), true);
+  assert.equal(Object.isFrozen(state), true);
+});

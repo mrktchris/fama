@@ -40,7 +40,7 @@
     this.voice = null; // local speechSynthesis voice choice
     this.rate = 1;
     this.pending = 0;
-    this.onStateChange = null; // callback(isSpeaking: boolean)
+    this._onStateChange = null; // callback(isSpeaking: boolean)
     this.cloudVoice = false;
     this._chain = Promise.resolve();
     this._audioEl = null;
@@ -67,6 +67,28 @@
     },
     listVoices() {
       return this.supported ? window.speechSynthesis.getVoices() : [];
+    },
+    status() {
+      return Object.freeze({
+        enabled: this.enabled,
+        supported: this.supported,
+        pending: this.pending,
+        rate: this.rate,
+        cloudVoice: this.cloudVoice,
+        voiceName: this.voice ? this.voice.name : null,
+      });
+    },
+    configure(options) {
+      const next = options || {};
+      if (next.rate !== undefined) {
+        const rate = Number(next.rate);
+        if (Number.isFinite(rate)) this.rate = Math.min(2, Math.max(0.5, rate));
+      }
+      if (typeof next.onStateChange === 'function' || next.onStateChange === null) this._onStateChange = next.onStateChange;
+      return this.status();
+    },
+    isIdle() {
+      return this.pending === 0;
     },
     setVoiceByName(name) {
       const v = this.listVoices().find((v) => v.name === name);
@@ -125,19 +147,24 @@
       this.enabled = false;
       this.stop();
     },
-    say(text, kind) {
+    enqueue(text, kind) {
       if (!this.enabled || !text) return;
       if (this.pending >= MAX_PENDING) return; // drop, this is a live feed, not a transcript to catch up on
       const generation = this._generation;
       this.pending += 1;
-      this.onStateChange && this.onStateChange(true);
+      this._onStateChange && this._onStateChange(true);
       this._chain = this._chain
         .then(() => this._speakOne(text, kind, generation))
         .catch(() => {}) // one bad utterance shouldn't jam the chain for the next one
         .then(() => {
           this.pending = Math.max(0, this.pending - 1);
-          this.onStateChange && this.onStateChange(this.pending > 0);
+          this._onStateChange && this._onStateChange(this.pending > 0);
         });
+    },
+    // Compatibility alias for extensions or old cached pages. Fama's own UI
+    // uses the speech-intent Interface above.
+    say(text, kind) {
+      return this.enqueue(text, kind);
     },
     async _speakOne(text, kind, generation) {
       if (generation !== this._generation || !this.enabled) return;
@@ -242,7 +269,7 @@
         URL.revokeObjectURL(this._audioUrl);
         this._audioUrl = null;
       }
-      this.onStateChange && this.onStateChange(false);
+      this._onStateChange && this._onStateChange(false);
     },
   };
 

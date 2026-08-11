@@ -37,13 +37,17 @@ Then open http://localhost:4317. Windows is the only platform this has actually 
 - **Spoken narration**, free by default (your OS's built-in voice) or OpenAI cloud voice if you want it to sound human. Click **enable voice** once, that's the only manual step.
 - **A rewrite step**, not just reading raw text verbatim: thinking and text events get a quick pass through a cheap language model first, turning rambling internal monologue into one short, natural spoken line. Length is a 3–30 second dial with a live cost estimate, persona and voice accent are both free-text fields you control (try "a sharp CMO giving a fast executive summary," or the built-in Dominican-English voice preset).
 - **Usage tracking.** Running dollar total for the cloud voice, right in Settings, resets independently of your real OpenAI billing.
-- **Desktop app** (Windows now, Mac buildable from source, see below): system tray, closes to tray instead of quitting, one-click update checks against this repo's releases.
+- **Desktop app** (Windows now, Mac buildable from source, see below): system tray,
+  closes to tray instead of quitting, and user-confirmed download/install updates.
 
 ## How it works
 
 1. Claude Code writes JSONL transcripts under `~/.claude/projects/<encoded-project-path>/`; Codex writes them under `~/.codex/sessions/YYYY/MM/DD/`.
-2. `server.js` watches the selected Claude project folders and matches active Codex transcripts by their recorded working directory. It tails new lines as they're appended (byte-offset based, never replaying history) and normalizes both formats into the same small event vocabulary.
-3. Those events stream to the browser over SSE. The viewer groups them into one lane per active session.
+2. The Selected Projects Module gives each watched project one stable identity, transcript directory, real working directory, and label. Old config shapes migrate automatically.
+3. Live Activity Ingest discovers matching Claude and Codex sessions, starts each tailer at end-of-file (never replaying history), invokes the provider adapters, and publishes a bounded SSE feed.
+4. The viewer groups normalized events into lanes. Its Narrator serializes speech intents through the free local voice or the optional server-side Cloud Narration Module.
+
+The deployable shape stays intentionally simple: one local server plus its optional Electron shell. `server.js` and `desktop/main.js` are composition roots; domain behavior lives behind the Interfaces documented in [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/0001-deepen-runtime-modules.md`](docs/adr/0001-deepen-runtime-modules.md).
 
 Nothing leaves the machine unless you turn on cloud voice. Be precise about what "on" means: with the rewrite step enabled (the default once cloud voice is configured), the **raw thinking/text content is sent to OpenAI first**, to be condensed, and the rewritten result is then sent again for speech synthesis. If rewriting fails for any reason, the raw text goes to speech synthesis directly instead of being dropped. Either way, it's your own key, billed to your own account, and it's exactly one line at a time, on demand, never a bulk transcript upload, but "only the narrated line" undersold it, the source text goes out too when summarizing is on.
 
@@ -53,11 +57,15 @@ By default it speaks narrated text and current thinking. Tool-call announcements
 
 **Free tier:** Windows' built-in SAPI voices via the browser, robotic but zero cost, zero setup. Open the app in Edge instead of Chrome for noticeably better free "Natural" neural voices through the same API.
 
-**Cloud tier (optional, costs money):** click the gear icon, paste an OpenAI key, pick a model. `gpt-4o-mini-tts` is the recommended default, it's the only model that honors the accent/style field, and was a reasonable latency/cost pick against the older `tts-1`/`tts-1-hd` models in informal testing during development, not a rigorous published benchmark. If a cloud call ever fails, that one line falls back to the free voice automatically, you never get silence.
+**Cloud tier (optional, costs money):** click the gear icon, paste an OpenAI key, pick a model. `gpt-4o-mini-tts` is the recommended default and the only current option here that honors the accent/style field. `tts-1` is a simpler per-character-priced alternative, while `tts-1-hd` trades speed and cost for quality. If a cloud call ever fails, that one line falls back to the free voice automatically, so you never get silence.
 
 **Dominican-English direction:** Settings includes a dedicated preset. Fama expands the short label into a full voice-design instruction: warm, natural Dominican-American English, authentic cadence, subtle Caribbean Spanish influence, clear and conversational, never exaggerated or stereotyped. This follows the prompt-specific voice-design pattern described by [Hume's accent guidance](https://www.hume.ai/blog/how-to-generate-ai-voices-with-accents), but the provider in Fama today is still OpenAI; Hume/Octave is research input, not an implemented provider.
 
-Cost math: lines are capped at 3–30 seconds of speech, live estimate shown in Settings as you adjust the slider, tracked running total in the Usage panel. It's cheap, real usage lands in cents per session for most people, but treat the live tracker as the real number, not the paragraph you're reading now. Your `.env` file is gitignored and the real key is never echoed back to the browser after you save it, only whether one is configured.
+Cost math: lines are capped at 3–30 seconds of speech, with a live estimate in Settings and a running local estimate in the Usage panel. The Cloud Narration Module is the single source for both figures. Rates were checked against OpenAI's official model pages on 2026-08-11; `tts-1` and `tts-1-hd` use their exact per-character rates, while mini-TTS remains approximate because OpenAI bills it in text and audio tokens. These figures are not a substitute for your provider bill. Your `.env` file is gitignored and the real key is never echoed back to the browser after you save it, only whether one is configured.
+
+### Two ways to follow the work
+
+**Messages** is the default conversation view. Prompts and agent replies read as a real dialogue, while reasoning, tool calls, results, and errors stay one click away in expandable activity cards. **Activity** switches the same live events into a compact technical stream. The selected view is remembered on this device; neither view replays transcript history from before Fama started watching.
 
 ### Latency
 
@@ -77,14 +85,17 @@ npx electron-builder --mac --publish never
 ```
 Needs Xcode Command Line Tools (`xcode-select --install`) and Node 22.12+ for the current Electron build toolchain. The source server itself remains compatible with Node 18+. Unsigned, so macOS Gatekeeper will block it the first time, right-click the app → Open, once, to approve it.
 
-**Updates:** the packaged app checks this repo's GitHub Releases on launch and, if something newer is out, offers to open the Releases page for you. It can't install itself in place yet (see Known limitations below), so "one-click" currently means one click to get to the download, not a fully automatic update. Nothing happens without your click either way.
+**Updates:** the packaged app checks GitHub Releases on launch. When a tagged release
+contains the installer, blockmap, and `latest.yml`, Fama offers to download it, then asks
+again before restarting to install. The tagged-release workflow publishes those three
+assets together and runs the package secret gate first. Nothing downloads or installs
+without your click.
 
 ## Known limitations
 
 - **It does not separate clients.** Every Claude Code session launched from the same working directory writes into the same project folder on disk, so if two unrelated threads are active at once, both narrate into the same feed. Click a lane's header to collapse one, or watch separate projects as separate entries instead (Settings → tray → Manage watched projects) for real separation.
 - Windows only for a pre-built binary right now.
 - Subagent transcripts aren't shown yet, only top-level sessions.
-- **Update checks work, one-click install doesn't (yet).** The app correctly detects when a newer version is out and opens the Releases page for you, but the update-in-place mechanism assumes an NSIS install, and the Releases page currently ships the portable zip as the primary download. Re-downloading and unzipping (or re-running the installer) is the real update path until that's wired together.
 
 ## How this compares to similar tools
 
@@ -102,13 +113,13 @@ Those are audio-only, hook- or CLI-triggered. What's different here: a standalon
 - [ ] Local neural TTS (Kokoro or Qwen-TTS) for genuinely near-zero latency, no cloud round trip
 - [x] **Codex transcript support.** `lib/parse-codex.js` normalizes real Codex session records into the same event vocabulary as Claude, and `server.js` tails matching active sessions as a second provider. Provider-native reasoning summaries are displayed only when Codex records expose them; opaque encrypted reasoning is never presented as readable text.
 - [ ] Support additional coding agents beyond Claude Code and Codex through the same provider-adapter pattern.
-- [ ] Proper signed Windows installer via GitHub Actions CI (also solves the Mac build without needing Mac hardware locally, and unlocks real one-click auto-install, see Known limitations above)
+- [ ] Sign the existing Windows installer when a certificate or Microsoft Trusted Signing enrollment is available
 - [ ] Subagent lanes, nested under their parent session
 - [ ] Detect when a session is specifically waiting on a permission decision, not just gone quiet, and say so in the notification differently
 - [x] Use Electron's bundled Node runtime so the packaged app needs no separate Node.js install or PATH dependency.
 - [x] Upgrade Electron/electron-builder and clear the build-tool dependency audit; CI now enforces a high-severity audit gate.
 - [ ] Actual code-signing certificate (or Microsoft Trusted Signing) — the CI pipeline is ready and waiting for one, this is a real purchase/identity-verification step for the repo owner, not an engineering task
-- [ ] Wire the installer into the actual auto-update flow (download + run silently) now that a real installer exists to target
+- [x] Wire the installer into a user-confirmed auto-update flow with release metadata and a secret-scanned tagged-release gate
 
 ## Contributing
 

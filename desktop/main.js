@@ -20,6 +20,11 @@ const fs = require('fs');
 const http = require('http');
 const { pathToFileURL } = require('url');
 const { autoUpdater } = require('electron-updater');
+const { LocalServerRuntime } = require('./local-server');
+const { DesktopNotifications } = require('./desktop-notifications');
+const { RuntimeConfigStore } = require('./runtime-config');
+const { createWindowPolicy, isLocalAppUrl } = require('./window-policy');
+const { UpdateRuntime } = require('./update-runtime');
 
 // Found by audit: with no single-instance lock, double-clicking the exe again
 // (very plausible, since closing the window hides it instead of quitting, and
@@ -39,101 +44,17 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('com.chrissierra.fama');
 }
 
-// Update NOTIFICATION, not one-click auto-install, despite the name of the
-// library: checks the GitHub Releases feed for this repo (see the "publish"
-// block in package.json) on launch, silent if there's nothing new. Real bug
-// found by reviewing this project's own test logs (not by inspection): the
-// original design here called autoUpdater.downloadUpdate() /
-// autoUpdater.quitAndInstall(), which is electron-updater's NSIS-installer
-// update flow. This app ships as an unpacked electron-packager folder (see
-// the README section on why NSIS can't run in this build environment), not
-// an NSIS install, so that flow was never actually going to work end to end,
-// on top of which every check was failing outright on a missing
-// app-update.yml (electron-builder writes that automatically; electron-
-// packager has no idea electron-updater exists) and then, once that part was
-// fixed, on a missing latest.yml release asset (also an electron-builder
-// output, now hand-generated and uploaded alongside every release zip, see
-// desktop/write-update-manifest.js and the release step in README/CHANGELOG).
-// Detecting "a newer version exists" now genuinely works; opening this
-// app's own Releases page to grab it is the honest equivalent of one-click
-// for a distribution method that has no installer to auto-run.
-//
-// Listeners registered once, module scope, not inside setupAutoUpdate() (that
-// used to re-register a full set on every call, stacking duplicate dialogs
-// after the first manual "Check for updates" click). lastCheckWasManual is
-// how the update-not-available/error handlers know whether to say anything:
-// silent on the automatic startup check (the common case), a real dialog
-// when you actually asked.
-let lastCheckWasManual = false;
-autoUpdater.autoDownload = false;
-autoUpdater.on('update-available', (info) => {
-  dialog
-    .showMessageBox({
-      type: 'info',
-      title: 'Update available',
-      message: `Fama ${info.version} is available (you're on ${app.getVersion()}).`,
-      buttons: ['Open Releases page', 'Not now'],
-      defaultId: 0,
-    })
-    .then((r) => {
-      if (r.response === 0) shell.openExternal('https://github.com/mrktchris/fama/releases/latest');
-    });
-});
-autoUpdater.on('error', (err) => {
-  console.error('[autoUpdater]', err);
-  if (lastCheckWasManual) {
-    dialog.showMessageBox({
-      type: 'error',
-      title: 'Could not check for updates',
-      message: `${err.message}\n\nYou can always check manually at the Releases page.`,
-    });
-  }
-});
-autoUpdater.on('update-not-available', () => {
-  // Found by audit: clicking "Check for updates" when already current did
-  // nothing visible, reads as broken rather than as good news.
-  if (lastCheckWasManual) {
-    dialog.showMessageBox({ type: 'info', title: 'Up to date', message: `You're on the latest version (${app.getVersion()}).` });
-  }
-});
+const updateRuntime = new UpdateRuntime({ updater: autoUpdater, dialog, shell, app });
 
 function setupAutoUpdate(manualCheck) {
-  if (!app.isPackaged) {
-    // Found live: clicking "Check for updates" in dev mode did nothing at
-    // all, no dialog, no console hint, reads as a broken button. It IS a
-    // no-op by design (electron-updater has nothing to check against outside
-    // a packaged build), but a manual click deserves to be told that instead
-    // of just... not responding.
-    if (manualCheck) {
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Not available in dev mode',
-        message: "Update checks only work in a packaged build, there's nothing for electron-updater to check against here.",
-      });
-    }
-    return;
-  }
-  lastCheckWasManual = !!manualCheck;
-  autoUpdater.checkForUpdates().catch((err) => {
-    // Found live: checkForUpdates() rejecting (as opposed to the autoUpdater
-    // emitting its own 'error' event, handled above) was only ever logged to
-    // console, invisible in a packaged app with no console window attached.
-    // A manual click that hits this path looked exactly like a dead button.
-    console.error('[autoUpdater] check failed', err);
-    if (lastCheckWasManual) {
-      dialog.showMessageBox({
-        type: 'error',
-        title: 'Could not check for updates',
-        message: `${err && err.message ? err.message : String(err)}\n\nYou can always check manually at the Releases page.`,
-      });
-    }
-  });
+  const updateMetadata = path.join(process.resourcesPath, 'app-update.yml');
+  const available = app.isPackaged && fs.existsSync(updateMetadata);
+  return updateRuntime.check({ manual: Boolean(manualCheck), available });
 }
 
 const PORT = 4317;
 const ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
-const DEFAULT_PREFS = { notificationsEnabled: true, launchOnStartup: false };
 
 // Rename continuity: app.getPath('userData') is derived from productName
 // (see package.json), so renaming Pico -> Fama moves every existing user's
@@ -177,57 +98,31 @@ function migrateFromPreviousName() {
 }
 migrateFromPreviousName();
 
-let serverProcess = null;
+const runtimeConfig = new RuntimeConfigStore(CONFIG_PATH);
+const { assertIpcSender, hardenWindowNavigation } = createWindowPolicy({ shell });
 let mainWindow = null;
 let onboardingWindow = null;
 let tray = null;
 let notifyReq = null; // live connection to our own /events SSE feed, for native notifications
 let shortcutOfferedThisRun = false;
-const hardenedSessions = new WeakSet();
-
-function loadConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-function saveConfig(cfg) {
-  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), { encoding: 'utf8', mode: 0o600 });
-  try {
-    fs.chmodSync(CONFIG_PATH, 0o600);
-  } catch {
-    // Windows ACLs govern this per-user directory instead.
-  }
-}
 
 // App-level prefs (notifications, launch-on-startup) live in the same
 // config.json as the watched project, just under their own keys, so there's
 // one file, not two, to keep in sync.
 function getPrefs() {
-  const cfg = loadConfig() || {};
-  return {
-    notificationsEnabled: typeof cfg.notificationsEnabled === 'boolean' ? cfg.notificationsEnabled : DEFAULT_PREFS.notificationsEnabled,
-    launchOnStartup: typeof cfg.launchOnStartup === 'boolean' ? cfg.launchOnStartup : DEFAULT_PREFS.launchOnStartup,
-  };
+  return runtimeConfig.prefs();
 }
 // Only these two keys, and only as booleans: this is reachable from the
 // renderer over IPC (see the set-app-prefs handler below), and an unfiltered
 // Object.assign of the whole request body would let that call also rewrite
-// watchDirsEncoded or any other config field, not just the two prefs this
+// selectedProjects or any other config field, not just the two prefs this
 // bridge is meant to expose. Not exploitable today (the only real caller is
 // this app's own Settings panel), but the IPC itself should not trust its
 // caller further than its own contract, found by security audit.
-const SETTABLE_PREF_KEYS = ['notificationsEnabled', 'launchOnStartup'];
 function setPrefs(partial) {
-  const cfg = loadConfig() || {};
-  for (const key of SETTABLE_PREF_KEYS) {
-    if (typeof partial[key] === 'boolean') cfg[key] = partial[key];
-  }
-  saveConfig(cfg);
+  const prefs = runtimeConfig.setPrefs(partial);
   if (typeof partial.launchOnStartup === 'boolean') applyLoginItemSetting(partial.launchOnStartup);
-  return getPrefs();
+  return prefs;
 }
 function applyLoginItemSetting(openAtLogin) {
   // No-op in dev (unpackaged): setLoginItemSettings would point Windows at
@@ -246,10 +141,14 @@ function applyLoginItemSetting(openAtLogin) {
 // (electron-packager copies the whole project), so nothing was ever gained
 // by keeping them independent.
 const { encodeProjectDir, claudeProjectsRoot, projectDirFromEncoded } = require(path.join(ROOT, 'lib', 'paths'));
+const {
+  selectedProjectsFromEncoded,
+  selectedProjectsFromSelection,
+  validEncodedProjects: validateEncodedProjects,
+} = require(path.join(ROOT, 'lib', 'selected-projects'));
 
 function validEncodedProjects(value) {
-  const candidates = Array.isArray(value) ? value : [value];
-  return [...new Set(candidates.filter((encoded) => projectDirFromEncoded(encoded)))];
+  return validateEncodedProjects(value, projectDirFromEncoded);
 }
 
 // Reads a project folder's real path from inside its own transcript data
@@ -347,66 +246,30 @@ function listAvailableProjects() {
   return projects;
 }
 
-// Found by external review, confirmed real: switching projects called
-// startServer() again without ever stopping the previous child, leaking the
-// old process (still holding the port) and risking EADDRINUSE on the new one,
-// with serverProcess overwritten so the leaked one couldn't even be reached
-// to clean up later. stopServer() now actually waits for exit before a new
-// one starts.
-function stopServer() {
-  disconnectNotifyStream();
-  if (!serverProcess) return Promise.resolve();
-  const proc = serverProcess;
-  serverProcess = null;
-  return new Promise((resolve) => {
-    proc.once('exit', resolve);
-    proc.kill();
-    setTimeout(resolve, 2000); // don't hang forever if the child won't die
-  });
-}
-
-async function startServer(watchDirsEncoded) {
-  await stopServer();
-  // Accept a single encoded dir too (older config, or a direct call), always
-  // work internally as a list, one server can now watch several projects.
-  const encodedList = validEncodedProjects(watchDirsEncoded);
-  if (!encodedList.length) throw new Error('No valid project directories were selected.');
-  const projectDirs = encodedList.map((encoded) => projectDirFromEncoded(encoded));
-  const projectCwds = projectDirs.map((dir, i) => realCwdFor(dir) || encodedList[i]);
-  const projectLabels = projectCwds.map((cwd) => path.basename(cwd));
-  serverProcess = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
-    // Real key ended up in a shipped release asset because the packaged app
-    // wrote .env next to server.js, inside its own resources folder, by
-    // default. This routes it into Electron's actual per-user data dir
-    // instead, same place config.json already lives, never inside anything
-    // that gets packaged/zipped/reinstalled.
-    env: Object.assign({}, process.env, {
-      PORT: String(PORT),
-      FAMA_ENV_PATH: path.join(app.getPath('userData'), '.env'),
-      FAMA_USAGE_PATH: path.join(app.getPath('userData'), 'usage.json'),
-      CLAUDE_NARRATOR_DIRS: JSON.stringify(projectDirs),
-      FAMA_PROJECT_CWDS: JSON.stringify(projectCwds),
-      FAMA_PROJECT_LABELS: JSON.stringify(projectLabels),
-      // Electron already ships a compatible Node runtime. Using it avoids a
-      // separate prerequisite and prevents PATH from selecting an unrelated
-      // or attacker-controlled node.exe.
-      ELECTRON_RUN_AS_NODE: '1',
-    }),
-    windowsHide: true,
-  });
-  connectNotifyStream();
-  serverProcess.stdout.on('data', (d) => console.log(`[server] ${d}`.trim()));
-  serverProcess.stderr.on('data', (d) => console.error(`[server] ${d}`.trim()));
-  serverProcess.on('exit', (code) => console.log(`[server] exited with code ${code}`));
-  // Keep startup failure explicit even though the server now uses Electron's
-  // bundled Node runtime. Corrupt/incomplete installations can still make the
-  // child process fail before any window is ready to explain what happened.
-  serverProcess.on('error', (err) => {
+const localServer = new LocalServerRuntime({
+  spawn,
+  executable: process.execPath,
+  serverPath: path.join(ROOT, 'server.js'),
+  port: PORT,
+  userDataPath: app.getPath('userData'),
+  onStarted: () => connectNotifyStream(),
+  onStopping: () => disconnectNotifyStream(),
+  onError: (error) => {
     dialog.showErrorBox(
       'Fama could not start',
-       `Failed to launch the bundled local server: ${err.message}\n\nRestart Fama. If this persists, reinstall the latest release.`
+      `Failed to launch the bundled local server: ${error.message}\n\nRestart Fama. If this persists, reinstall the latest release.`
     );
-  });
+  },
+});
+
+async function startServer(watchDirsEncoded) {
+  const projects =
+    Array.isArray(watchDirsEncoded) && watchDirsEncoded.length && watchDirsEncoded[0] && watchDirsEncoded[0].dir
+      ? watchDirsEncoded
+      : selectedProjectsFromEncoded(watchDirsEncoded, { projectDirFromEncoded, realCwdFor, encodeProjectDir });
+  if (!projects.length) throw new Error('No valid project directories were selected.');
+  await localServer.start(projects);
+  return projects;
 }
 
 // --- desktop notifications ---------------------------------------------
@@ -416,17 +279,12 @@ async function startServer(watchDirsEncoded) {
 // goes quiet, not on every single line. Reads the server's own /events SSE
 // feed rather than duplicating any transcript-tailing logic here, main.js
 // just watches the same stream the browser tab does.
-const sessionActivity = new Map(); // sessionId -> { count, timer }
 // Found live: 20s of quiet after only 3 events fires constantly during
 // completely normal use, Claude Code sessions have pauses well over 20s
 // between tool calls all the time. Raised to a threshold that means
 // something (a real burst, then genuinely done for a while), plus a global
-// cooldown below so several lanes going idle around the same time doesn't
-// still stack bubbles back to back.
-const IDLE_NOTIFY_MS = 90000;
-const IDLE_NOTIFY_MIN_EVENTS = 8;
-const IDLE_NOTIFY_COOLDOWN_MS = 120000;
-let lastIdleNotifyAt = 0;
+// cooldown so several lanes going idle around the same time do not stack
+// bubbles back to back. Desktop Notifications owns that policy and its timers.
 
 function notify(title, body) {
   if (!getPrefs().notificationsEnabled) return;
@@ -455,30 +313,7 @@ function notify(title, body) {
   n.show();
 }
 
-function handleNotifyEvent(evt) {
-  if (evt.kind === 'system') return;
-  if (evt.kind === 'error') {
-    notify('Fama · Error', evt.detail || evt.label || 'Something went wrong in a session.');
-    return;
-  }
-  const sid = evt.sessionId;
-  if (!sid) return;
-  let entry = sessionActivity.get(sid);
-  if (!entry) {
-    entry = { count: 0, timer: null, provider: evt.provider || null };
-    sessionActivity.set(sid, entry);
-  }
-  if (evt.provider) entry.provider = evt.provider;
-  entry.count += 1;
-  if (entry.timer) clearTimeout(entry.timer);
-  entry.timer = setTimeout(() => {
-    if (entry.count >= IDLE_NOTIFY_MIN_EVENTS) {
-      const agent = entry.provider === 'codex' ? 'Codex' : 'Claude';
-      notify('Fama · Idle', `${agent}'s gone quiet after some activity.`);
-    }
-    sessionActivity.delete(sid);
-  }, IDLE_NOTIFY_MS);
-}
+const desktopNotifications = new DesktopNotifications({ deliver: notify });
 
 // Plain http.get against our own loopback server, not a browser EventSource,
 // this runs in the main process which has no DOM. Retries a few times while
@@ -499,7 +334,7 @@ function connectNotifyStream(attemptsLeft) {
         buf = buf.slice(idx + 2);
         if (!raw.startsWith('data: ')) continue;
         try {
-          handleNotifyEvent(JSON.parse(raw.slice(6)));
+          desktopNotifications.handle(JSON.parse(raw.slice(6)));
         } catch {
           // partial/malformed frame, ignore
         }
@@ -507,7 +342,7 @@ function connectNotifyStream(attemptsLeft) {
     });
   });
   req.on('error', () => {
-    if (attemptsLeft > 0 && serverProcess) setTimeout(() => connectNotifyStream(attemptsLeft - 1), 300);
+    if (attemptsLeft > 0 && localServer.isRunning()) setTimeout(() => connectNotifyStream(attemptsLeft - 1), 300);
   });
   notifyReq = req;
 }
@@ -520,69 +355,10 @@ function disconnectNotifyStream() {
     }
     notifyReq = null;
   }
-  sessionActivity.forEach((entry) => entry.timer && clearTimeout(entry.timer));
-  sessionActivity.clear();
+  desktopNotifications.reset();
 }
 
 let isQuitting = false;
-
-function hardenSession(session) {
-  if (hardenedSessions.has(session)) return;
-  hardenedSessions.add(session);
-  session.setPermissionCheckHandler(() => false);
-  session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
-  if (typeof session.setDevicePermissionHandler === 'function') session.setDevicePermissionHandler(() => false);
-  session.on('will-download', (event) => event.preventDefault());
-}
-
-function safeExternalUrl(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-function hardenWindowNavigation(window, allowedNavigation) {
-  hardenSession(window.webContents.session);
-  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!allowedNavigation(url)) event.preventDefault();
-  });
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    const externalUrl = safeExternalUrl(url);
-    if (externalUrl) {
-      shell.openExternal(externalUrl).catch((err) => console.error('[navigation] failed to open external URL', err));
-      return { action: 'deny' };
-    }
-    if (/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(url)) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          autoHideMenuBar: true,
-          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false },
-        },
-      };
-    }
-    return { action: 'deny' };
-  });
-}
-
-function isLocalAppUrl(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' && url.port === String(PORT) && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
-  } catch {
-    return false;
-  }
-}
-
-function assertIpcSender(event, expectedWindow) {
-  if (!expectedWindow || expectedWindow.isDestroyed() || event.sender !== expectedWindow.webContents) {
-    throw new Error('Rejected IPC call from an unexpected renderer.');
-  }
-}
 
 function loadMainApp(window, attemptsLeft = 15) {
   window.loadURL(`http://localhost:${PORT}`).catch(() => {
@@ -616,7 +392,7 @@ function openMainWindow() {
     },
   });
   mainWindow.setMenuBarVisibility(false);
-  hardenWindowNavigation(mainWindow, isLocalAppUrl);
+  hardenWindowNavigation(mainWindow, (url) => isLocalAppUrl(url, PORT));
   // Closing the window hides it, doesn't quit, that's the whole point of the
   // tray icon: this keeps narrating in the background until you actually quit.
   mainWindow.on('close', (event) => {
@@ -672,28 +448,22 @@ ipcMain.handle('pick-folder', async (event) => {
 // pre-check whatever's already selected when reopened as "manage" rather
 // than first-run setup.
 function currentProjects() {
-  const cfg = loadConfig() || {};
-  if (Array.isArray(cfg.watchDirsEncoded)) return validEncodedProjects(cfg.watchDirsEncoded);
-  if (cfg.watchDirEncoded) return validEncodedProjects(cfg.watchDirEncoded); // pre-multi-folder config
-  return [];
+  return runtimeConfig.encodedSelection(projectDirFromEncoded);
 }
 ipcMain.handle('get-current-projects', (event) => {
   assertIpcSender(event, onboardingWindow);
   return currentProjects();
 });
-ipcMain.handle('confirm-projects', async (event, encodedList) => {
+ipcMain.handle('confirm-projects', async (event, selection) => {
   assertIpcSender(event, onboardingWindow);
-  const list = Array.isArray(encodedList) ? validEncodedProjects(encodedList) : [];
-  if (!list.length) return false; // nothing selected, caller should keep the window open
-  // Merge, don't replace: this used to overwrite the whole config file with
-  // just the watched dir(s), silently dropping notificationsEnabled and
-  // launchOnStartup back to defaults every time projects were changed.
-  saveConfig(Object.assign({}, loadConfig(), { watchDirsEncoded: list }));
+  const projects = selectedProjectsFromSelection(selection, { projectDirFromEncoded, realCwdFor, encodeProjectDir });
+  if (!projects.length) return false; // nothing selected, caller should keep the window open
+  runtimeConfig.setSelectedProjects(projects);
   if (onboardingWindow) {
     onboardingWindow.close();
     onboardingWindow = null;
   }
-  await startServer(list);
+  await startServer(projects);
   openMainWindow();
   offerDesktopShortcut();
   return true;
@@ -750,15 +520,15 @@ function offerDesktopShortcut() {
   if (shortcutOfferedThisRun) return;
   shortcutOfferedThisRun = true;
   if (!app.isPackaged) return;
-  const cfg = loadConfig() || {};
+  const cfg = runtimeConfig.load();
   if (cfg.desktopShortcutOffered) return;
   if (fs.existsSync(desktopShortcutPath())) {
-    saveConfig(Object.assign({}, cfg, { desktopShortcutOffered: true }));
+    runtimeConfig.update({ desktopShortcutOffered: true });
     return;
   }
   createDesktopShortcut().then((ok) => {
     if (ok) {
-      saveConfig(Object.assign({}, loadConfig(), { desktopShortcutOffered: true }));
+      runtimeConfig.update({ desktopShortcutOffered: true });
       notify('Fama', 'Added a Fama shortcut to your Desktop.');
     }
   });
@@ -811,11 +581,11 @@ app.whenReady().then(async () => {
 });
 
 // Deliberately no window-all-closed handler. The main window hides instead of
-// closing (see the 'close' listener above), and if it's the onboarding
-// window that closes without a tray, that's a genuinely broken state (no
-// icon.png yet, see the icon TODO), not one to silently paper over by quitting.
+// closing (see the 'close' listener above), and if the onboarding window
+// closes without a tray, that is a genuinely broken state rather than one to
+// silently paper over by quitting.
 
 app.on('before-quit', () => {
   isQuitting = true;
-  if (serverProcess) serverProcess.kill();
+  localServer.terminate();
 });

@@ -6,42 +6,47 @@
 <style>
   :root {
     color-scheme: dark;
-    --bg: #080b12; --panel: #111827; --border: rgba(255,255,255,.08); --text: #f4f7fb;
-    --muted: #b9c3d2; --muted-2: #7f8a9b; --accent: #7c9dff; --accent-glow: rgba(124, 157, 255, .35);
+    --bg: #050713; --panel: rgba(18,23,42,.86); --border: rgba(189,209,255,.13); --text: #f6f8ff;
+    --muted: #aab3cc; --muted-2: #6f7893; --accent: #7083ff; --accent-glow: rgba(100,122,255,.34);
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font-family: "Segoe UI", -apple-system, sans-serif; padding: 22px;
+    margin: 0; color: var(--text);
+    background: radial-gradient(circle at 20% -10%, rgba(82,108,255,.28), transparent 44%), var(--bg);
+    font-family: "Segoe UI", -apple-system, sans-serif; padding: 22px 24px 24px;
     display: flex; flex-direction: column; height: 100vh;
   }
-  h1 { font-size: 15px; margin: 0 0 4px; }
-  p.sub { font-size: 12.5px; color: var(--muted); margin: 0 0 16px; line-height: 1.5; }
-  #list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .setup-brand { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; margin-bottom: 18px; }
+  .setup-brand img { width: 30px; height: 30px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+  h1 { font-size: 19px; letter-spacing: -.02em; margin: 0 0 5px; }
+  p.sub { font-size: 12.5px; color: var(--muted); margin: 0 0 18px; line-height: 1.55; }
+  #list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; padding: 1px; }
   .project-option {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-    padding: 10px 12px; cursor: pointer; text-align: left; color: var(--text);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 13px;
+    padding: 11px 12px; cursor: pointer; text-align: left; color: var(--text);
     font-family: inherit; font-size: 12.5px; display: flex; align-items: flex-start; gap: 10px;
+    transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
   }
-  .project-option:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
-  .project-option.checked { border-color: var(--accent); background: rgba(124, 157, 255, 0.08); }
+  .project-option:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.22); }
+  .project-option.checked { border-color: var(--accent); background: rgba(112,131,255,.12); box-shadow: inset 0 0 0 1px var(--accent-glow); }
   .project-option input[type="checkbox"] { margin-top: 2px; accent-color: var(--accent); flex: 0 0 auto; }
   .project-option .text { min-width: 0; }
   .project-option .path { font-weight: 600; word-break: break-all; }
   .project-option .meta { color: var(--muted-2); font-size: 11px; margin-top: 3px; }
   #empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 30px 10px; }
   #browse, #continue {
-    margin-top: 10px; padding: 9px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--panel); color: var(--text); cursor: pointer; font-size: 12.5px;
+    margin-top: 10px; padding: 10px; border-radius: 11px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); cursor: pointer; font-size: 12.5px; transition: transform .18s ease, border-color .18s ease;
   }
-  #browse:hover { border-color: var(--muted-2); }
+  #browse:hover { border-color: var(--muted-2); transform: translateY(-1px); }
   #continue { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
   #continue:disabled { background: var(--panel); color: var(--muted-2); border-color: var(--border); cursor: default; font-weight: 400; }
 </style>
 </head>
 <body>
-  <h1>Which project(s) should this watch?</h1>
-  <p class="sub">Claude Code sessions found on this machine, most recently active first. Check as many as you want, Fama can watch several at once. This only shows what's already running, nothing about your work is sent anywhere.</p>
+  <div class="setup-brand"><img src="../viewer/identity-signal.png" alt=""><span>Fama</span></div>
+  <h1>Choose the conversations to follow</h1>
+  <p class="sub">Select one or more projects with Claude Code activity. Fama keeps the live message feed on this computer and only sends text out when you explicitly configure cloud narration.</p>
   <div id="list"><div id="empty">Looking…</div></div>
   <button id="browse" type="button">Browse for a different folder…</button>
   <button id="continue" type="button" disabled>Continue</button>

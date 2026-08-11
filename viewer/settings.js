@@ -12,20 +12,20 @@
   // client-only prefs (voice, thinking/tools toggles, lane names).
   const ACCENT_KEY = 'fama.accent';
   const swatches = document.querySelectorAll('#accent-swatches .swatch');
-  function applyAccent(hex, glowRgb) {
-    document.documentElement.style.setProperty('--accent', hex);
-    document.documentElement.style.setProperty('--accent-glow', `rgba(${glowRgb}, 0.35)`);
+  function applyAccent(hex) {
+    const selected = Array.from(swatches).find((s) => s.dataset.accent === hex) || swatches[0];
+    document.documentElement.dataset.accent = selected ? selected.dataset.theme : 'aurora';
     swatches.forEach((s) => s.classList.toggle('active', s.dataset.accent === hex));
   }
   swatches.forEach((swatch) => {
     swatch.addEventListener('click', () => {
-      applyAccent(swatch.dataset.accent, swatch.dataset.glow);
-      localStorage.setItem(ACCENT_KEY, JSON.stringify({ hex: swatch.dataset.accent, glow: swatch.dataset.glow }));
+      applyAccent(swatch.dataset.accent);
+      localStorage.setItem(ACCENT_KEY, JSON.stringify({ hex: swatch.dataset.accent }));
     });
   });
   try {
     const saved = JSON.parse(localStorage.getItem(ACCENT_KEY));
-    if (saved && saved.hex) applyAccent(saved.hex, saved.glow);
+    if (saved && saved.hex) applyAccent(saved.hex);
     else swatches[0] && swatches[0].classList.add('active'); // aurora blue default, matches the CSS default already in place
   } catch {
     swatches[0] && swatches[0].classList.add('active');
@@ -37,8 +37,10 @@
   const FEED_SIZE_KEY = 'fama.feed-size';
   const sizeChips = document.querySelectorAll('#feed-size-row .preset-chip');
   function applyFeedSize(size) {
-    document.documentElement.style.setProperty('--feed-font-size', size);
-    sizeChips.forEach((c) => c.classList.toggle('active', c.dataset.size === size));
+    const allowed = new Set(Array.from(sizeChips, (chip) => chip.dataset.size));
+    const selected = allowed.has(size) ? size : '12px';
+    document.documentElement.dataset.feedSize = selected;
+    sizeChips.forEach((c) => c.classList.toggle('active', c.dataset.size === selected));
   }
   sizeChips.forEach((chip) => {
     chip.addEventListener('click', () => {
@@ -116,37 +118,75 @@
     manageProjectsBtn.addEventListener('click', () => window.famaDesktop.manageProjects());
   }
 
-  // Mirrors the server's own PRICE_PER_CHAR table (server.js) exactly, on
-  // purpose: these two fell out of sync when gpt-4o-mini-tts was added here
-  // without a matching entry, so the estimate shown before you save quietly
-  // didn't match what the usage tracker recorded after. If you change one,
-  // change the other, that mismatch was a real, confirmed bug, not a
-  // hypothetical one.
-  const CHARS_PER_WORD = 5.5;
-  const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000012 }; // keep in sync with server.js's own table
+  // Pricing comes from the Cloud Narration Module through /config. Keeping the
+  // provider knowledge server-side prevents the preview and recorded usage
+  // from drifting into two different estimates again.
+  let pricePerChar = {};
+  let narrationEstimate = null;
+  let modelCapabilities = new Map();
+  let styleControlModel = null;
+
+  function populateSelect(select, options, currentValue) {
+    select.replaceChildren();
+    const normalized = Array.isArray(options) ? options : [];
+    for (const item of normalized) {
+      const value = typeof item === 'string' ? item : item && item.id;
+      if (!value) continue;
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = typeof item === 'string' ? item : item.label || value;
+      select.appendChild(option);
+    }
+    if (currentValue && !normalized.some((item) => (typeof item === 'string' ? item : item && item.id) === currentValue)) {
+      const saved = document.createElement('option');
+      saved.value = currentValue;
+      saved.textContent = `${currentValue} · saved value`;
+      select.appendChild(saved);
+    }
+    select.value = currentValue || (select.options[0] && select.options[0].value) || '';
+  }
+
   function updateLengthReadout() {
     const seconds = Number(lengthSlider.value);
-    const words = Math.max(6, Math.round(seconds * 2.5));
-    const chars = Math.round(words * CHARS_PER_WORD);
-    const price = PRICE_PER_CHAR[modelSelect.value] || PRICE_PER_CHAR['tts-1-hd'];
-    const cost = chars * price;
+    if (!narrationEstimate) {
+      lengthReadout.textContent = `~${seconds}s`;
+      lengthCost.textContent = 'Cost estimate is loading from the local narration service.';
+      return;
+    }
+    const words = Math.max(narrationEstimate.minWords, Math.round(seconds * narrationEstimate.wordsPerSecond));
+    const chars = Math.round(words * narrationEstimate.charactersPerWord);
     lengthReadout.textContent = `~${seconds}s, ~${words} words`;
+    const price = pricePerChar[modelSelect.value];
+    if (!Number.isFinite(price)) {
+      lengthCost.textContent = 'Cost estimate is loading from the local narration service.';
+      return;
+    }
+    const cost = chars * price;
     lengthCost.textContent = `~$${cost.toFixed(4)} estimated per line at ${modelSelect.value}, more length is directly more credits`;
   }
   lengthSlider.addEventListener('input', updateLengthReadout);
   modelSelect.addEventListener('change', updateLengthReadout);
 
   function updateVoiceStyleSupport() {
-    const supported = modelSelect.value === 'gpt-4o-mini-tts';
-    voiceStyleSupportEl.textContent = supported ? '' : '(only gpt-4o-mini-tts honors this, pick it above)';
+    const selected = modelCapabilities.get(modelSelect.value);
+    const supported = Boolean(selected && selected.voiceStyleSupported);
+    voiceStyleSupportEl.textContent = supported
+      ? '(recommended, supports style control)'
+      : styleControlModel
+        ? `(switch to ${styleControlModel.id} to use style control)`
+        : '(style control unavailable for the current catalog)';
     voiceStyleInput.disabled = !supported;
-    voiceStyleInput.placeholder = supported ? 'e.g. natural Dominican-American English, warm and conversational' : 'switch the model above to use this';
+    voiceStyleInput.placeholder = supported
+      ? 'e.g. natural Dominican-American English, warm and conversational'
+      : 'switch the model above to use this';
   }
   modelSelect.addEventListener('change', updateVoiceStyleSupport);
 
   // Preset chips just fill the target field, they don't save by themselves,
   // Save still has to be clicked, same as if you'd typed it yourself.
-  document.querySelectorAll('.preset-chip').forEach((chip) => {
+  // Scope this to chips that actually target a text field. Feed-size chips
+  // share the visual class but must never clear the voice-style input.
+  document.querySelectorAll('.preset-chip[data-target]').forEach((chip) => {
     chip.addEventListener('click', () => {
       const target = chip.dataset.target === 'persona' ? personaInput : voiceStyleInput;
       target.value = chip.dataset.value || '';
@@ -245,8 +285,13 @@
     fetch('/config')
       .then((r) => r.json())
       .then((cfg) => {
-        modelSelect.value = cfg.model || 'tts-1-hd';
-        voiceSelect.value = cfg.voice || 'alloy';
+        const models = Array.isArray(cfg.models) ? cfg.models : [];
+        modelCapabilities = new Map(models.map((model) => [model.id, model]));
+        styleControlModel = models.find((model) => model.voiceStyleSupported) || null;
+        populateSelect(modelSelect, models, cfg.model);
+        pricePerChar = cfg.pricing && cfg.pricing.estimatedTtsPerChar ? cfg.pricing.estimatedTtsPerChar : {};
+        narrationEstimate = cfg.narrationEstimate || null;
+        populateSelect(voiceSelect, cfg.voices, cfg.voice);
         rewriteCheckbox.checked = cfg.rewrite !== false;
         lengthSlider.min = cfg.narrationMin || 3;
         lengthSlider.max = cfg.narrationMax || 30;
@@ -319,13 +364,13 @@
     // currently typed in the form, a control that silently contradicted its
     // own label. Now it saves first (same as clicking Save) so what you hear
     // always matches what's on screen when you click it.
-    if (!window.narrator.enabled) window.narrator.enable();
+    if (!window.narrator.status().enabled) window.narrator.enable();
     const sample =
       "So I'm thinking about whether to use approach A or approach B here, and honestly A seems cleaner " +
       'since it avoids the extra dependency, but let me actually double check that before committing to it.';
     saveSettings().then((saved) => {
       if (!saved) return;
-      window.narrator.say(sample, 'thinking');
+      window.narrator.enqueue(sample, 'thinking');
       setTimeout(refreshUsage, 3000); // rough guess at when the call has actually landed
     });
   });
