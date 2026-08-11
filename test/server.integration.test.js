@@ -268,6 +268,10 @@ test('static file serving rejects path traversal', async () => {
 test('static files support query strings and reject non-read methods', async () => {
   const withQuery = await request('/index.html?cache-bust=1');
   assert.equal(withQuery.status, 200);
+  assert.match(withQuery.headers['content-type'], /^text\/html; charset=utf-8$/);
+  const generatedIdentity = await request('/identity-signal.png');
+  assert.equal(generatedIdentity.status, 200);
+  assert.equal(generatedIdentity.headers['content-type'], 'image/png');
   const post = await request('/style.css', { method: 'POST' });
   assert.equal(post.status, 405);
   assert.equal(post.headers.allow, 'GET, HEAD');

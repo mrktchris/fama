@@ -141,7 +141,7 @@
 
   function updateVoiceStyleSupport() {
     const supported = modelSelect.value === 'gpt-4o-mini-tts';
-    voiceStyleSupportEl.textContent = supported ? '' : '(only gpt-4o-mini-tts honors this, pick it above)';
+    voiceStyleSupportEl.textContent = supported ? '(recommended, supports style control)' : '(switch to gpt-4o-mini-tts to use style control)';
     voiceStyleInput.disabled = !supported;
     voiceStyleInput.placeholder = supported ? 'e.g. natural Dominican-American English, warm and conversational' : 'switch the model above to use this';
   }
@@ -149,7 +149,9 @@
 
   // Preset chips just fill the target field, they don't save by themselves,
   // Save still has to be clicked, same as if you'd typed it yourself.
-  document.querySelectorAll('.preset-chip').forEach((chip) => {
+  // Scope this to chips that actually target a text field. Feed-size chips
+  // share the visual class but must never clear the voice-style input.
+  document.querySelectorAll('.preset-chip[data-target]').forEach((chip) => {
     chip.addEventListener('click', () => {
       const target = chip.dataset.target === 'persona' ? personaInput : voiceStyleInput;
       target.value = chip.dataset.value || '';

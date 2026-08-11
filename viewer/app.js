@@ -6,15 +6,25 @@ const emptyHintEl = document.getElementById('empty-hint');
 const lanes = new Map(); // sessionId -> lane record
 
 const KIND_META = {
-  prompt: { icon: '➤', cls: 'k-prompt' },
-  text: { icon: '', cls: 'k-text' },
-  thinking: { icon: '·', cls: 'k-thinking' },
-  tool: { icon: '→', cls: 'k-tool' },
-  result: { icon: '✓', cls: 'k-result' },
-  error: { icon: '✕', cls: 'k-error' },
-  image: { icon: '🖼', cls: 'k-image' },
-  system: { icon: '•', cls: 'k-system' },
+  prompt: { icon: 'user', cls: 'k-prompt', title: 'You' },
+  text: { icon: 'signal', cls: 'k-text', title: 'Assistant' },
+  thinking: { icon: 'thinking', cls: 'k-thinking', title: 'Thinking' },
+  tool: { icon: 'tool', cls: 'k-tool', title: 'Tool call' },
+  result: { icon: 'check', cls: 'k-result', title: 'Result' },
+  error: { icon: 'error', cls: 'k-error', title: 'Error' },
+  image: { icon: 'image', cls: 'k-image', title: 'Image' },
+  system: { icon: 'activity', cls: 'k-system', title: 'Activity' },
 };
+
+function makeIcon(name, className) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add(className || 'ui-icon');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#icon-' + name);
+  svg.appendChild(use);
+  return svg;
+}
 
 const narrator = new Narrator();
 window.narrator = narrator; // settings.js drives it directly (test button, refresh after save)
@@ -40,6 +50,7 @@ const voiceModeEl = document.getElementById('voice-mode');
 const voiceSelectEl = document.getElementById('voice-select');
 const voiceRateEl = document.getElementById('voice-rate');
 const voiceRateReadoutEl = document.getElementById('voice-rate-readout');
+const viewButtons = [...document.querySelectorAll('.view-option')];
 
 // --- client-side prefs that persist across reloads, no server round trip ---
 const PREFS_KEY = 'fama.prefs';
@@ -73,6 +84,21 @@ const prefs = loadPrefs();
 if (typeof prefs.speakThinking === 'boolean') speakThinkingEl.checked = prefs.speakThinking;
 if (typeof prefs.speakTools === 'boolean') speakToolsEl.checked = prefs.speakTools;
 if (typeof prefs.rate === 'number') voiceRateEl.value = prefs.rate;
+
+function applyViewMode(requestedMode, persist) {
+  const mode = requestedMode === 'activity' ? 'activity' : 'conversation';
+  document.body.classList.toggle('view-conversation', mode === 'conversation');
+  document.body.classList.toggle('view-activity', mode === 'activity');
+  for (const button of viewButtons) {
+    const selected = button.dataset.view === mode;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
+  if (persist) savePrefs({ viewMode: mode });
+}
+
+applyViewMode(prefs.viewMode || 'conversation', false);
+for (const button of viewButtons) button.addEventListener('click', () => applyViewMode(button.dataset.view, true));
 speakThinkingEl.addEventListener('change', () => savePrefs({ speakThinking: speakThinkingEl.checked }));
 speakToolsEl.addEventListener('change', () => savePrefs({ speakTools: speakToolsEl.checked }));
 
@@ -101,13 +127,16 @@ stopTalkingEl.addEventListener('click', () => narrator.stop());
 
 function refreshVoiceButton() {
   const state = narrator.status();
-  voiceToggleEl.textContent = state.enabled ? '🔊 voice on' : '🔈 enable voice';
+  const label = voiceToggleEl.querySelector('span');
+  if (label) label.textContent = state.enabled ? 'Voice on' : 'Enable voice';
   voiceToggleEl.classList.toggle('active', state.enabled);
+  voiceToggleEl.setAttribute('aria-pressed', String(state.enabled));
 }
 
 voiceToggleEl.addEventListener('click', () => {
   if (!narrator.status().supported) {
-    voiceToggleEl.textContent = 'speech not supported here';
+    const label = voiceToggleEl.querySelector('span');
+    if (label) label.textContent = 'Speech unavailable';
     voiceToggleEl.disabled = true;
     return;
   }
@@ -207,17 +236,13 @@ function laneFor(sessionId) {
   const el = document.createElement('section');
   el.className = 'lane';
   el.draggable = true;
-  // Built with createElement/textContent, not innerHTML, sessionId is server
-  // data (a Claude-assigned UUID today, but nothing enforces that shape
-  // structurally), every other render path in this file already avoids
-  // innerHTML for exactly that reason, this was the one exception.
-  el.innerHTML = '<div class="lane-header"><span class="lane-live-dot"></span></div><div class="lane-feed"></div>';
+  el.innerHTML = '<div class="lane-header"><span class="lane-live-dot"></span></div><div class="lane-feed" role="log" aria-live="polite"></div>';
   const header = el.querySelector('.lane-header');
 
   const dragHandle = document.createElement('span');
   dragHandle.className = 'lane-drag-handle';
   dragHandle.title = 'Drag to reposition';
-  dragHandle.textContent = '⠿';
+  dragHandle.appendChild(makeIcon('grip'));
 
   const projectEl = document.createElement('span');
   projectEl.className = 'lane-project hidden';
@@ -268,23 +293,41 @@ function laneFor(sessionId) {
   const badgeEl = document.createElement('span');
   badgeEl.className = 'lane-current-badge';
   badgeEl.textContent = 'following';
+
+  const providerEl = document.createElement('span');
+  providerEl.className = 'lane-provider';
+
   const pinBtn = document.createElement('button');
   pinBtn.type = 'button';
   pinBtn.className = 'lane-pin';
   pinBtn.title = 'Listen to this session, overriding auto-follow';
   pinBtn.setAttribute('aria-label', 'Listen to this session, overriding auto-follow');
   pinBtn.setAttribute('aria-pressed', 'false');
-  pinBtn.textContent = '🔊';
+  pinBtn.appendChild(makeIcon('pin'));
   pinBtn.addEventListener('click', (e) => {
     e.stopPropagation(); // don't also toggle collapse
     pinnedSessionId = pinnedSessionId === key ? null : key;
     markCurrentLane();
   });
-  header.append(dragHandle, projectEl, titleEl, renameInput, pinBtn, badgeEl);
+
+  const collapseIcon = makeIcon('chevron', 'lane-chevron');
+  header.append(dragHandle, projectEl, titleEl, renameInput, providerEl, badgeEl, pinBtn, collapseIcon);
   lanesEl.prepend(el);
 
   header.title = 'Click to collapse this session';
-  header.addEventListener('click', () => el.classList.toggle('collapsed'));
+  header.setAttribute('role', 'button');
+  header.setAttribute('tabindex', '0');
+  header.setAttribute('aria-expanded', 'true');
+  function toggleCollapsed() {
+    const collapsed = el.classList.toggle('collapsed');
+    header.setAttribute('aria-expanded', String(!collapsed));
+  }
+  header.addEventListener('click', toggleCollapsed);
+  header.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleCollapsed();
+  });
 
   // Plain HTML5 drag-and-drop, no library: these are already real DOM nodes
   // in a simple flex column, reordering is just moving the dragged element
@@ -308,6 +351,7 @@ function laneFor(sessionId) {
     feedEl: el.querySelector('.lane-feed'),
     titleEl: el.querySelector('.lane-title'),
     projectEl,
+    providerEl,
     lastTs: Date.now(),
     titled: !!customName,
   };
@@ -341,29 +385,27 @@ function markCurrentLane() {
   }
 }
 
-function addRow(lane, evt) {
-  if (!lane.titled && evt.kind === 'prompt' && evt.detail) {
-    lane.titleEl.textContent = evt.detail.slice(0, 70);
-    lane.titled = true;
-  }
+function eventAuthor(evt, meta) {
+  if (evt.kind === 'prompt') return 'You';
+  if (evt.kind === 'text') return evt.provider === 'codex' ? 'Codex' : 'Claude';
+  if (evt.kind === 'tool' && evt.label) return evt.label;
+  return meta.title;
+}
 
-  const meta = KIND_META[evt.kind] || KIND_META.system;
-  const row = document.createElement('div');
-  row.className = 'row ' + meta.cls;
+function formatEventTime(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
 
-  const label = document.createElement('span');
-  label.className = 'row-label';
-  label.textContent = (meta.icon ? meta.icon + ' ' : '') + (evt.label || evt.kind);
-
-  const detail = document.createElement('span');
-  detail.className = 'row-detail';
-
-  // Image events carry the actual picture (see lib/parse.js's media field)
-  // rather than just a "[image]" caption — render it as a real thumbnail,
-  // click to view full size, instead of unreadable placeholder text.
+function appendEventDetail(detail, evt) {
+  // Image events carry the actual picture rather than only a caption. Inline
+  // data stays same-origin and remote images remain explicit outbound links.
   if (evt.kind === 'image' && evt.media && evt.media.tooLarge) {
     detail.textContent = '[image too large to preview]';
-  } else if (evt.kind === 'image' && evt.media) {
+    return;
+  }
+  if (evt.kind === 'image' && evt.media) {
     const src = evt.media.data ? `data:${evt.media.mediaType || 'image/png'};base64,${evt.media.data}` : null;
     if (src) {
       const link = document.createElement('a');
@@ -373,25 +415,82 @@ function addRow(lane, evt) {
       const img = document.createElement('img');
       img.className = 'row-thumb';
       img.src = src;
-      img.alt = 'image';
+      img.alt = 'Shared image';
       img.loading = 'lazy';
       link.appendChild(img);
       detail.appendChild(link);
-    } else if (evt.media.externalUrl) {
+      return;
+    }
+    if (evt.media.externalUrl) {
       const link = document.createElement('a');
       link.href = evt.media.externalUrl;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.textContent = 'open external image';
+      link.textContent = 'Open external image';
       detail.appendChild(link);
-    } else {
-      detail.textContent = evt.detail || '';
+      return;
     }
-  } else {
-    detail.textContent = evt.detail || '';
+  }
+  detail.textContent = evt.kind === 'thinking' ? evt.full || evt.detail || '' : evt.detail || '';
+}
+
+function addRow(lane, evt) {
+  if (!lane.titled && evt.kind === 'prompt' && evt.detail) {
+    lane.titleEl.textContent = evt.detail.slice(0, 70);
+    lane.titled = true;
   }
 
-  row.append(label, detail);
+  if (!lane.providerEl.textContent && evt.provider) {
+    lane.providerEl.textContent = evt.provider === 'codex' ? 'Codex' : 'Claude';
+    lane.providerEl.dataset.provider = evt.provider;
+  }
+
+  const meta = KIND_META[evt.kind] || KIND_META.system;
+  const row = document.createElement('div');
+  row.className = 'row ' + meta.cls;
+  row.dataset.kind = evt.kind || 'system';
+
+  const avatar = document.createElement('span');
+  avatar.className = 'row-avatar';
+  avatar.appendChild(makeIcon(meta.icon));
+
+  const content = document.createElement('div');
+  content.className = 'row-content';
+
+  const head = document.createElement('div');
+  head.className = 'row-head';
+  const label = document.createElement('span');
+  label.className = 'row-label';
+  label.textContent = eventAuthor(evt, meta);
+  const time = document.createElement('time');
+  time.className = 'row-time';
+  time.dateTime = evt.ts || '';
+  time.textContent = formatEventTime(evt.ts);
+  head.append(label, time);
+
+  const detail = document.createElement('div');
+  detail.className = 'row-detail';
+  appendEventDetail(detail, evt);
+
+  const isDisclosure = evt.kind === 'thinking' || evt.kind === 'tool' || evt.kind === 'result' || evt.kind === 'error';
+  if (isDisclosure) {
+    const disclosure = document.createElement('details');
+    disclosure.className = 'event-disclosure';
+    disclosure.open = evt.kind === 'error';
+    const summary = document.createElement('summary');
+    summary.append(avatar, head);
+    const chevron = makeIcon('chevron', 'disclosure-chevron');
+    summary.appendChild(chevron);
+    const body = document.createElement('div');
+    body.className = 'disclosure-body';
+    body.appendChild(detail);
+    disclosure.append(summary, body);
+    row.appendChild(disclosure);
+  } else {
+    content.append(head, detail);
+    row.append(avatar, content);
+  }
+
   lane.feedEl.appendChild(row);
   while (lane.feedEl.children.length > 200) lane.feedEl.removeChild(lane.feedEl.firstChild);
   lane.feedEl.scrollTop = lane.feedEl.scrollHeight;

@@ -10,13 +10,19 @@ verification result, or architectural recommendation.
 
 Cloud provider model names and price estimates belong to
 `lib/cloud-narration.js`. The viewer consumes that Interface instead of
-duplicating provider constants. Recheck official OpenAI model and pricing pages
-before changing defaults, availability labels, or estimates. As of 2026-08-11,
-the official `gpt-4o-mini-tts` page lists it as active and "Default."
+duplicating provider constants. As of 2026-08-11, the catalog lists
+`gpt-4o-mini-tts` without a deprecation badge and its detail page labels it
+"Default." Recheck the exact catalog entry, not an adjacent model badge,
+before changing defaults, availability labels, or estimates.
 
 Desktop updates are opt-in twice: once before download and once before
 restart/install. A tagged release must pass tests, audits, packaging, and the
 packaged-artifact secret scan before publication.
+
+The interface identity and interaction rules live in `docs/VISUAL-SYSTEM.md`.
+Keep the ImageGen source as design provenance under `docs/assets/`, ship only
+optimized derivatives, use the SVG symbol family for small controls, and keep
+Messages/Activity as two projections of the same live-only event stream.
 
 The source server supports Node 18+. Electron development and packaging use
 Node 22.12+; the packaged app starts the server with Electron's bundled Node

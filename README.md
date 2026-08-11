@@ -61,7 +61,11 @@ By default it speaks narrated text and current thinking. Tool-call announcements
 
 **Dominican-English direction:** Settings includes a dedicated preset. Fama expands the short label into a full voice-design instruction: warm, natural Dominican-American English, authentic cadence, subtle Caribbean Spanish influence, clear and conversational, never exaggerated or stereotyped. This follows the prompt-specific voice-design pattern described by [Hume's accent guidance](https://www.hume.ai/blog/how-to-generate-ai-voices-with-accents), but the provider in Fama today is still OpenAI; Hume/Octave is research input, not an implemented provider.
 
-Cost math: lines are capped at 3–30 seconds of speech, with a live estimate in Settings and a running local estimate in the Usage panel. The Cloud Narration Module is the single source for both figures. Rates were checked against OpenAI's official model pages on 2026-08-11; `tts-1` and `tts-1-hd` use their exact per-character rates, while the active mini-TTS model remains approximate because OpenAI bills it in text and audio tokens. These figures are not a substitute for your provider bill. Your `.env` file is gitignored and the real key is never echoed back to the browser after you save it, only whether one is configured.
+Cost math: lines are capped at 3–30 seconds of speech, with a live estimate in Settings and a running local estimate in the Usage panel. The Cloud Narration Module is the single source for both figures. Rates were checked against OpenAI's official model pages on 2026-08-11; `tts-1` and `tts-1-hd` use their exact per-character rates, while mini-TTS remains approximate because OpenAI bills it in text and audio tokens. These figures are not a substitute for your provider bill. Your `.env` file is gitignored and the real key is never echoed back to the browser after you save it, only whether one is configured.
+
+### Two ways to follow the work
+
+**Messages** is the default conversation view. Prompts and agent replies read as a real dialogue, while reasoning, tool calls, results, and errors stay one click away in expandable activity cards. **Activity** switches the same live events into a compact technical stream. The selected view is remembered on this device; neither view replays transcript history from before Fama started watching.
 
 ### Latency
 

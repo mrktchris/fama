@@ -135,7 +135,14 @@ function readJsonBody(req) {
 // --- http server ------------------------------------------------------
 
 const viewerDir = path.join(__dirname, 'viewer');
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+};
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",

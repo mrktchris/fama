@@ -20,6 +20,11 @@ delivery stay on the machine. Cloud Narration is an explicit optional Adapter.
   redaction, rewrite policy, speech synthesis, and local usage estimates.
 - **Narrator**: the browser Module that serializes speech intents, selects the
   local or Cloud Narration Adapter, drops stale work, and reports its state.
+- **Messages View**: the conversation-first projection of Live Activity. It
+  shows prompts and agent replies as dialogue and keeps reasoning/tool/result
+  events available through expandable disclosures.
+- **Activity View**: the compact operator projection of the same Live Activity
+  records. Switching views never changes ingest, retention, or narration.
 - **Desktop Runtime**: the Electron composition Module that owns per-user
   configuration, child-server and update lifecycle, secure windows, and IPC
   wiring.
@@ -34,3 +39,5 @@ delivery stay on the machine. Cloud Narration is an explicit optional Adapter.
 - Desktop Runtime uses Electron's bundled Node runtime for the local server.
 - Renderer code uses explicit IPC and Narrator Interfaces, not Node access or
   mutable implementation state.
+- Messages and Activity are live-only projections of one event record; neither
+  view may fetch or replay transcript history that predates observation.

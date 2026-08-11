@@ -5,57 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fama</title>
 <link rel="icon" href="/icon-mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/identity-signal.png">
 <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-  <header>
-    <div class="mascot idle" id="mascot" aria-hidden="true">
-      <!-- Crystal-spark status indicator, replaces the old bird mascot
-           (2026-08-10 rebrand). Same class hooks as before (.body/.crest/
-           .wing/.beak/.eye/.think-dots), mascot.js's state toggling is
-           unchanged; only the shapes and what they mean visually changed:
-           a faceted crystal (matches icon-mark.svg) instead of a bird. -->
-      <div class="mascot-ring">
-        <svg viewBox="0 0 64 64" width="30" height="30">
-          <g class="bob">
-            <path class="body" d="M32 27 L44 34 L44 55 L32 62 L20 55 L20 34 Z" />
-            <path class="crest" d="M32 8 L46 20 L38 25 L32 20 L26 25 L18 20 Z" />
-            <path class="wing" d="M18 20 L26 25 L26 50 L20 45 Z" />
-            <path class="beak" d="M46 20 L38 25 L38 50 L44 45 Z" />
-            <circle class="eye" cx="32" cy="34" r="3" />
-            <g class="think-dots">
-              <circle cx="10" cy="14" r="2" />
-              <circle cx="4" cy="22" r="2" />
-              <circle cx="2" cy="31" r="2" />
-            </g>
-          </g>
-        </svg>
+<body class="view-conversation">
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-signal" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="4.3" transform="rotate(0 12 12)"/><ellipse cx="12" cy="12" rx="8" ry="4.3" transform="rotate(120 12 12)"/><ellipse cx="12" cy="12" rx="8" ry="4.3" transform="rotate(240 12 12)"/></symbol>
+    <symbol id="icon-messages" viewBox="0 0 24 24"><path d="M5 6.5h10.5a3 3 0 0 1 3 3v3.2a3 3 0 0 1-3 3H10l-4.5 3v-3.2A3 3 0 0 1 3 12.7V9a2.5 2.5 0 0 1 2-2.5Z"/><path d="M8 10h6M8 13h4"/></symbol>
+    <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M3 12h4l2.1-6 4.1 12 2.2-6H21"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3.5 7.5h6l2-2h3l2 2h4v11h-17z"/><path d="M3.5 10h17"/></symbol>
+    <symbol id="icon-volume" viewBox="0 0 24 24"><path d="M4 10v4h4l4 3V7l-4 3z"/><path d="M15 9.2a4 4 0 0 1 0 5.6M17.5 6.8a7.2 7.2 0 0 1 0 10.4"/></symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="7"/></symbol>
+    <symbol id="icon-pin" viewBox="0 0 24 24"><path d="m8 4 8 0-1.2 5 2.7 2.7v1.8H6.5v-1.8L9.2 9zM12 13.5V21"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5.5 19c.8-4 3-6 6.5-6s5.7 2 6.5 6"/></symbol>
+    <symbol id="icon-thinking" viewBox="0 0 24 24"><path d="M7.2 17.2A7 7 0 1 1 17 16l-1 3-3-1a7 7 0 0 1-5.8-.8Z"/><circle cx="8.5" cy="11.5" r=".7"/><circle cx="12" cy="11.5" r=".7"/><circle cx="15.5" cy="11.5" r=".7"/></symbol>
+    <symbol id="icon-tool" viewBox="0 0 24 24"><path d="m8 7-4 5 4 5M16 7l4 5-4 5M14 4l-4 16"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12.5 4.2 4L19 7"/></symbol>
+    <symbol id="icon-error" viewBox="0 0 24 24"><path d="M12 4 3.5 19h17zM12 9v4M12 16.5v.5"/></symbol>
+    <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m5 17 4.5-4 3.2 2.7 2.8-2.2L19 17"/></symbol>
+    <symbol id="icon-grip" viewBox="0 0 24 24"><circle cx="9" cy="7" r=".9"/><circle cx="15" cy="7" r=".9"/><circle cx="9" cy="12" r=".9"/><circle cx="15" cy="12" r=".9"/><circle cx="9" cy="17" r=".9"/><circle cx="15" cy="17" r=".9"/></symbol>
+  </svg>
+
+  <header class="app-bar">
+    <div class="brand-cluster">
+      <div class="mascot idle" id="mascot" aria-hidden="true">
+        <span class="signal-aura"></span>
+        <img src="/identity-signal.png" alt="" width="42" height="42">
+        <span id="mascot-label" class="sr-only">idle</span>
       </div>
-      <span id="mascot-label">idle</span>
+      <div class="brand-copy">
+        <h1>Fama</h1>
+        <span class="connection-state"><span class="connection-dot"></span><span id="status" role="status" aria-live="polite">connecting&hellip;</span></span>
+      </div>
     </div>
 
-    <h1>Fama</h1>
-    <span id="status" role="status" aria-live="polite">connecting&hellip;</span>
-    <!-- Electron-only, same reasoning as the desktop-app-only settings section:
-         meaningless in a plain browser tab (npm start), which can't spawn a
-         native folder picker or manage the server's watch list at runtime.
-         Hidden by default, shown by app.js only if window.famaDesktop exists. -->
-    <button id="manage-projects" type="button" title="Add or remove watched projects" class="hidden">&#128193; projects</button>
+    <nav class="view-switch" aria-label="Feed view">
+      <button id="view-conversation" type="button" class="view-option active" data-view="conversation" aria-pressed="true"><svg><use href="#icon-messages"></use></svg><span>Messages</span></button>
+      <button id="view-activity" type="button" class="view-option" data-view="activity" aria-pressed="false"><svg><use href="#icon-activity"></use></svg><span>Activity</span></button>
+    </nav>
 
     <div id="header-actions">
-      <span id="voice-mode" title="Which voice backend is active" aria-live="polite"></span>
-      <button id="voice-toggle" type="button">&#128264; enable voice</button>
-      <button id="stop-talking" type="button" title="Cancel the current line without turning voice off" disabled>&#9209; stop talking</button>
-      <button id="settings-toggle" type="button" title="Settings" aria-label="Settings" aria-controls="settings-overlay" aria-expanded="false">&#9881;</button>
+      <button id="manage-projects" type="button" title="Add or remove watched projects" class="icon-text-button hidden"><svg><use href="#icon-folder"></use></svg><span>Projects</span></button>
+      <span id="voice-mode" class="voice-mode-chip" title="Which voice backend is active" aria-live="polite"></span>
+      <button id="voice-toggle" type="button" class="icon-text-button"><svg><use href="#icon-volume"></use></svg><span>Enable voice</span></button>
+      <button id="stop-talking" type="button" class="icon-button" title="Cancel the current line without turning voice off" aria-label="Stop talking" disabled><svg><use href="#icon-stop"></use></svg></button>
+      <button id="settings-toggle" type="button" class="icon-button" title="Settings" aria-label="Settings" aria-controls="settings-overlay" aria-expanded="false"><svg><use href="#icon-settings"></use></svg></button>
     </div>
   </header>
 
-  <main id="lanes"></main>
+  <main id="lanes" aria-label="Live agent conversations"></main>
 
   <div id="empty-hint" hidden>
-    <div class="empty-icon">&#127908;</div>
-    <p>No active sessions yet.</p>
-    <p class="empty-sub">Start or continue a Claude Code or Codex session in this project. It shows up here within a second, and reads itself out loud once voice is on.</p>
+    <div class="empty-orbit"><img src="/identity-signal.png" alt="" width="78" height="78"></div>
+    <p>Waiting for a live message.</p>
+    <p class="empty-sub">Continue a Claude Code or Codex task in a watched project. Fama shows the conversation here as it happens and can narrate it aloud.</p>
   </div>
 
   <div id="settings-overlay" class="settings-overlay hidden" aria-hidden="true">
