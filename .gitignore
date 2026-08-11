@@ -12,3 +12,10 @@ Thumbs.db
 # Rebrand planning doc — deliberately kept out of the public repo until
 # the rename actually happens, not mine to publish ahead of that call.
 docs/brand/
+
+# Pre-launch planning material — Product Hunt drop copy and brand-kit
+# prompts. Not published ahead of an actual launch decision; the real
+# thumbnail gets committed on its own once it's actually in use.
+docs/PRODUCT-HUNT-DROP.md
+docs/FAMA-BRAND-KIT-V2-PROMPTS.md
+docs/ph-thumbnail-240.png
