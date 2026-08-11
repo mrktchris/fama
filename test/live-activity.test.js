@@ -75,3 +75,44 @@ test('Live Activity Ingest filters Codex discovery through Selected Projects', (
   assert.equal(published[0].detail, 'yes');
   assert.equal(published[0].provider, 'codex');
 });
+
+test('Live Activity Ingest tails selected-project BUZZ heartbeats live-only', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fama-buzz-ingest-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const famaDir = path.join(root, '.fama');
+  fs.mkdirSync(famaDir);
+  const heartbeatFile = path.join(famaDir, 'agent-heartbeats.jsonl');
+  fs.writeFileSync(heartbeatFile, `${JSON.stringify({ type: 'old' })}\n`, 'utf8');
+  const events = [];
+  const ingest = new LiveActivityIngest({
+    projects: [{ id: 'hq', dir: path.join(root, 'claude'), cwd: root, name: 'HQ' }],
+    codexSessionsDir: path.join(root, 'missing-codex'),
+    parseBuzzHeartbeat: (record) => [{ sessionId: 'buzz-frac7-max', kind: 'agent_heartbeat', detail: record.client_summary }],
+    feed: { publish: (event) => events.push(event), snapshot: () => ({}) },
+  });
+
+  ingest.scan(Date.now());
+  fs.appendFileSync(heartbeatFile, `${JSON.stringify({ client_summary: 'New safe summary' })}\n`, 'utf8');
+  ingest.poll();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].detail, 'New safe summary');
+  assert.equal(events[0].provider, 'buzz');
+  assert.equal(events[0].projectId, 'hq');
+  assert.equal(events[0].sessionId, 'hq:buzz-frac7-max');
+});
+
+test('Live Activity Ingest keeps the same BUZZ persona isolated across projects', () => {
+  const published = [];
+  const ingest = new LiveActivityIngest({
+    projects: [],
+    parseBuzzHeartbeat: () => [{ sessionId: 'buzz-frac7-max', kind: 'agent_heartbeat', detail: 'safe' }],
+    feed: { publish: (event) => published.push(event), snapshot: () => ({}) },
+  });
+
+  ingest._publishRecords([{}], { id: 'alpha', name: 'Alpha' }, 'buzz');
+  ingest._publishRecords([{}], { id: 'beta', name: 'Beta' }, 'buzz');
+  assert.deepEqual(published.map((event) => event.sessionId), [
+    'alpha:buzz-frac7-max',
+    'beta:buzz-frac7-max',
+  ]);
+});

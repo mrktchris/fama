@@ -13,9 +13,10 @@ delivery stay on the machine. Cloud Narration is an explicit optional Adapter.
   Session. Existing transcript history is never replayed.
 - **Live Activity Ingest**: the Module that discovers active Sessions, owns
   their tailers, invokes provider Adapters, and publishes Live Activity.
-- **Provider Adapter**: a parser that converts a provider transcript record
-  into Fama's normalized Live Activity event shape. Claude and Codex are the
-  current providers.
+- **Provider Adapter**: a parser that converts a provider transcript or
+  sanitized heartbeat record into Fama's normalized Live Activity event
+  shape. Claude, Codex, and the optional selected-project BUZZ heartbeat file
+  are the current providers.
 - **Cloud Narration**: the optional Module that owns narration settings,
   redaction, rewrite policy, speech synthesis, and local usage estimates.
 - **Narrator**: the browser Module that serializes speech intents, selects the
@@ -38,6 +39,9 @@ delivery stay on the machine. Cloud Narration is an explicit optional Adapter.
 
 - Live Activity is live-only; attaching a tailer starts at end-of-file.
 - Activity from an unselected project never enters the feed.
+- A BUZZ heartbeat is observed only from a selected project's
+  `.fama/agent-heartbeats.jsonl`; Fama starts at EOF and never reads BUZZ keys,
+  messages, private memory, or client identifiers.
 - Provider attribution and Selected Project identity survive normalization.
 - A raw API key never crosses the server/browser Interface or enters a package.
 - Desktop Runtime uses Electron's bundled Node runtime for the local server.

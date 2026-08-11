@@ -466,6 +466,7 @@ body.view-activity main#lanes { grid-template-columns: repeat(auto-fit, minmax(m
 }
 .lane-provider[data-provider="claude"] { color: #c9a4ff; }
 .lane-provider[data-provider="codex"] { color: var(--result); }
+.lane-provider[data-provider="buzz"] { color: #a9e85c; }
 
 .lane-project {
   flex: 0 0 auto;

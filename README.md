@@ -7,7 +7,7 @@
 [![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-0078D4)](https://github.com/mrktchris/fama/releases/latest)
 [![Build provenance: Sigstore](https://img.shields.io/badge/provenance-Sigstore-3c8dbc)](https://github.com/mrktchris/fama/attestations)
 
-**See and hear Claude Code and Codex work, live.**
+**See and hear Claude Code, Codex, and opt-in agent heartbeats work, live.**
 
 Fama is a local-first Windows desktop companion for coding agents. It turns the transcript files already on your computer into an always-visible conversation and activity dashboard, with optional spoken narration.
 
@@ -53,10 +53,16 @@ See [SECURITY.md](SECURITY.md) for the threat model, private reporting process, 
 
 ## How it works
 
-1. Claude Code writes JSONL transcripts under `~/.claude/projects/`; Codex writes session JSONL under `~/.codex/sessions/`.
+1. Claude Code writes JSONL transcripts under `~/.claude/projects/`; Codex writes session JSONL under `~/.codex/sessions/`. A selected project may also expose a sanitized live-only BUZZ stream at `.fama/agent-heartbeats.jsonl`.
 2. Fama matches only the projects selected by the user and starts each tailer at end-of-file, so opening the app does not replay old work.
 3. Provider adapters normalize new records into one bounded event vocabulary and publish them over a local Server-Sent Events stream.
 4. The viewer groups events into lanes. Narration is serialized so active sessions do not talk over one another.
+
+The optional BUZZ adapter is intentionally narrow: it accepts only the FRAC7
+persona, status, timestamp, trace ID, and a client-safe summary of at most 240
+characters. It never reads BUZZ credentials, channel messages, internal
+reasoning, role memory, or a client identifier. The selected-project rule and
+live-only EOF rule apply exactly as they do to transcript sources.
 
 The deployable shape is intentionally small: one loopback-only Node server and an optional Electron shell. `server.js` and `desktop/main.js` are composition roots; domain behavior lives behind the interfaces documented in [CONTEXT.md](CONTEXT.md) and [ADR 0001](docs/adr/0001-deepen-runtime-modules.md).
 
