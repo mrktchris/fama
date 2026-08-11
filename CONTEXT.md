@@ -28,6 +28,10 @@ delivery stay on the machine. Cloud Narration is an explicit optional Adapter.
 - **Desktop Runtime**: the Electron composition Module that owns per-user
   configuration, child-server and update lifecycle, secure windows, and IPC
   wiring.
+- **Desktop Notifications**: the Desktop Runtime Module that turns Live
+  Activity errors and meaningful Session-idle transitions into bounded native
+  notifications. It owns per-Session debounce timers and the global idle
+  cooldown; Electron notification delivery is its Adapter.
 - **Session**: one provider transcript with a stable session identity.
 
 ## Invariants

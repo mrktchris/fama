@@ -21,6 +21,7 @@ const http = require('http');
 const { pathToFileURL } = require('url');
 const { autoUpdater } = require('electron-updater');
 const { LocalServerRuntime } = require('./local-server');
+const { DesktopNotifications } = require('./desktop-notifications');
 const { RuntimeConfigStore } = require('./runtime-config');
 const { createWindowPolicy, isLocalAppUrl } = require('./window-policy');
 const { UpdateRuntime } = require('./update-runtime');
@@ -278,17 +279,12 @@ async function startServer(watchDirsEncoded) {
 // goes quiet, not on every single line. Reads the server's own /events SSE
 // feed rather than duplicating any transcript-tailing logic here, main.js
 // just watches the same stream the browser tab does.
-const sessionActivity = new Map(); // sessionId -> { count, timer }
 // Found live: 20s of quiet after only 3 events fires constantly during
 // completely normal use, Claude Code sessions have pauses well over 20s
 // between tool calls all the time. Raised to a threshold that means
 // something (a real burst, then genuinely done for a while), plus a global
-// cooldown below so several lanes going idle around the same time doesn't
-// still stack bubbles back to back.
-const IDLE_NOTIFY_MS = 90000;
-const IDLE_NOTIFY_MIN_EVENTS = 8;
-const IDLE_NOTIFY_COOLDOWN_MS = 120000;
-let lastIdleNotifyAt = 0;
+// cooldown so several lanes going idle around the same time do not stack
+// bubbles back to back. Desktop Notifications owns that policy and its timers.
 
 function notify(title, body) {
   if (!getPrefs().notificationsEnabled) return;
@@ -317,30 +313,7 @@ function notify(title, body) {
   n.show();
 }
 
-function handleNotifyEvent(evt) {
-  if (evt.kind === 'system') return;
-  if (evt.kind === 'error') {
-    notify('Fama · Error', evt.detail || evt.label || 'Something went wrong in a session.');
-    return;
-  }
-  const sid = evt.sessionId;
-  if (!sid) return;
-  let entry = sessionActivity.get(sid);
-  if (!entry) {
-    entry = { count: 0, timer: null, provider: evt.provider || null };
-    sessionActivity.set(sid, entry);
-  }
-  if (evt.provider) entry.provider = evt.provider;
-  entry.count += 1;
-  if (entry.timer) clearTimeout(entry.timer);
-  entry.timer = setTimeout(() => {
-    if (entry.count >= IDLE_NOTIFY_MIN_EVENTS) {
-      const agent = entry.provider === 'codex' ? 'Codex' : 'Claude';
-      notify('Fama · Idle', `${agent}'s gone quiet after some activity.`);
-    }
-    sessionActivity.delete(sid);
-  }, IDLE_NOTIFY_MS);
-}
+const desktopNotifications = new DesktopNotifications({ deliver: notify });
 
 // Plain http.get against our own loopback server, not a browser EventSource,
 // this runs in the main process which has no DOM. Retries a few times while
@@ -361,7 +334,7 @@ function connectNotifyStream(attemptsLeft) {
         buf = buf.slice(idx + 2);
         if (!raw.startsWith('data: ')) continue;
         try {
-          handleNotifyEvent(JSON.parse(raw.slice(6)));
+          desktopNotifications.handle(JSON.parse(raw.slice(6)));
         } catch {
           // partial/malformed frame, ignore
         }
@@ -382,8 +355,7 @@ function disconnectNotifyStream() {
     }
     notifyReq = null;
   }
-  sessionActivity.forEach((entry) => entry.timer && clearTimeout(entry.timer));
-  sessionActivity.clear();
+  desktopNotifications.reset();
 }
 
 let isQuitting = false;
@@ -609,9 +581,9 @@ app.whenReady().then(async () => {
 });
 
 // Deliberately no window-all-closed handler. The main window hides instead of
-// closing (see the 'close' listener above), and if it's the onboarding
-// window that closes without a tray, that's a genuinely broken state (no
-// icon.png yet, see the icon TODO), not one to silently paper over by quitting.
+// closing (see the 'close' listener above), and if the onboarding window
+// closes without a tray, that is a genuinely broken state rather than one to
+// silently paper over by quitting.
 
 app.on('before-quit', () => {
   isQuitting = true;
