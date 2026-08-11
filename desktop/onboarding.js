@@ -56,7 +56,7 @@ function addRow(p) {
 function renderProjects(projects) {
   listEl.innerHTML = '';
   if (!projects.length) {
-    listEl.innerHTML = '<div id="empty">No Claude Code sessions found yet. Start one, or browse for a folder below.</div>';
+    listEl.innerHTML = '<div id="empty">No Claude Code or Codex sessions found yet. Start one, or browse for a folder below.</div>';
     return;
   }
   for (const p of projects) addRow(p);

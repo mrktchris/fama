@@ -1,4 +1,4 @@
-name: Release Windows installer
+name: Release Windows app
 
 on:
   push:
@@ -7,24 +7,28 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  windows-installer:
+  windows-release:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
       - run: npm test
       - run: npm audit --audit-level=high
+
       - name: Verify tag matches package version
         shell: pwsh
         run: |
@@ -32,28 +36,82 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne $expected) {
             throw "Tag $env:GITHUB_REF_NAME does not match package version $expected"
           }
+
       - name: Build installer and updater metadata
         run: npm run dist:win
         env:
           CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-      - name: Block secrets and forbidden files before publishing
+
+      - name: Block secrets and forbidden files in installer payload
         run: node desktop/verify-package.js dist-desktop/win-unpacked
-      - name: Publish installer, blockmap, and update manifest
+
+      - name: Build and verify portable package
+        run: npm run dist:win-packager
+
+      - name: Assemble release assets and checksums
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $installer = Get-Item "dist-desktop/Fama-Setup-$version.exe"
+          Copy-Item $installer.FullName 'dist-desktop/Fama-Setup.exe' -Force
+          Compress-Archive -Path 'dist-desktop/Fama-win32-x64/*' -DestinationPath 'dist-desktop/Fama-win32-x64.zip' -Force
+
+          npm sbom --sbom-format cyclonedx | Out-File 'dist-desktop/fama-sbom.cdx.json' -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw 'SBOM generation failed.' }
+
+          $assets = @(
+            $installer.FullName,
+            (Resolve-Path 'dist-desktop/Fama-Setup.exe').Path,
+            (Resolve-Path 'dist-desktop/Fama-win32-x64.zip').Path,
+            (Resolve-Path 'dist-desktop/latest.yml').Path,
+            (Get-Item "dist-desktop/Fama-Setup-$version.exe.blockmap").FullName,
+            (Resolve-Path 'dist-desktop/fama-sbom.cdx.json').Path
+          )
+          $lines = $assets | Sort-Object | ForEach-Object {
+            $file = Get-Item $_
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash *$($file.Name)"
+          }
+          $lines | Set-Content 'dist-desktop/SHA256SUMS.txt' -Encoding utf8
+
+      - name: Create signed build provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3.0.0
+        with:
+          subject-path: |
+            dist-desktop/Fama-Setup-*.exe
+            dist-desktop/Fama-Setup.exe
+            dist-desktop/Fama-win32-x64.zip
+
+      - name: Create signed SBOM attestation
+        uses: actions/attest-sbom@10926c72720ffc3f7b666661c8e55b1344e2a365 # v2.0.0
+        with:
+          subject-path: |
+            dist-desktop/Fama-Setup-*.exe
+            dist-desktop/Fama-Setup.exe
+            dist-desktop/Fama-win32-x64.zip
+          sbom-path: dist-desktop/fama-sbom.cdx.json
+
+      - name: Publish verified release bundle
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:GITHUB_REF_NAME
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $assets = @(
-            (Get-ChildItem dist-desktop -Filter 'Fama-Setup-*.exe' | Select-Object -First 1 -ExpandProperty FullName),
+            (Resolve-Path "dist-desktop/Fama-Setup-$version.exe").Path,
+            (Resolve-Path "dist-desktop/Fama-Setup-$version.exe.blockmap").Path,
+            (Resolve-Path 'dist-desktop/Fama-Setup.exe').Path,
+            (Resolve-Path 'dist-desktop/Fama-win32-x64.zip').Path,
             (Resolve-Path 'dist-desktop/latest.yml').Path,
-            (Get-ChildItem dist-desktop -Filter '*.blockmap' | Select-Object -First 1 -ExpandProperty FullName)
+            (Resolve-Path 'dist-desktop/fama-sbom.cdx.json').Path,
+            (Resolve-Path 'dist-desktop/SHA256SUMS.txt').Path
           )
-          if ($assets -contains $null) { throw 'Installer update assets are incomplete.' }
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag @assets --clobber
+            gh release edit $tag --title "Fama v$version — First stable release" --notes-file CHANGELOG.md --latest
           } else {
-            gh release create $tag @assets --generate-notes --verify-tag
+            gh release create $tag @assets --title "Fama v$version — First stable release" --notes-file CHANGELOG.md --latest --verify-tag
           }

@@ -3,6 +3,7 @@ node_modules/
 run.pid
 electron.pid
 dist-desktop/
+.release-*/
 coverage/
 .env
 .env.*
