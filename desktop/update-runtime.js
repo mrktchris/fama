@@ -19,14 +19,17 @@ class UpdateRuntime {
     updater.on('error', (error) => this._run(() => this._error(error)));
   }
 
-  check({ manual = false, packaged = this._app.isPackaged } = {}) {
-    if (!packaged) {
+  check({ manual = false, available = this._app.isPackaged } = {}) {
+    if (!available) {
       if (manual) {
         return this._dialog.showMessageBox({
           type: 'info',
-          title: 'Not available in dev mode',
-          message: "Update checks only work in a packaged build; there's nothing to install here.",
-        });
+          title: 'Updates unavailable in this build',
+          message: 'Automatic updates are available in the installed Windows build. Portable and development builds can use the Releases page.',
+          buttons: ['Open Releases page', 'Close'],
+          defaultId: 0,
+          cancelId: 1,
+        }).then((result) => (result.response === 0 ? this._shell.openExternal(RELEASE_URL) : undefined));
       }
       return Promise.resolve();
     }
@@ -60,7 +63,7 @@ class UpdateRuntime {
     const result = await this._dialog.showMessageBox({
       type: 'info',
       title: 'Update ready',
-      message: `Fama${version} is downloaded and verified.`,
+      message: `Fama${version} is downloaded.`,
       detail: 'Restart now to install it, or keep working and install later.',
       buttons: ['Restart and install', 'Later'],
       defaultId: 0,

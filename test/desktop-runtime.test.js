@@ -9,7 +9,7 @@ const { EventEmitter } = require('node:events');
 const { RuntimeConfigStore } = require('../desktop/runtime-config');
 const { LocalServerRuntime } = require('../desktop/local-server');
 const { createWindowPolicy, isLocalAppUrl, safeExternalUrl } = require('../desktop/window-policy');
-const { UpdateRuntime } = require('../desktop/update-runtime');
+const { RELEASE_URL, UpdateRuntime } = require('../desktop/update-runtime');
 
 test('Desktop Runtime config preserves unrelated state and filters renderer preferences', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fama-runtime-'));
@@ -87,6 +87,24 @@ test('Update Runtime requires user confirmation before download and before insta
   assert.equal(updater.autoDownload, false);
   assert.equal(updater.autoInstallOnAppQuit, false);
   assert.ok(runtime);
+});
+
+test('Update Runtime skips portable builds without updater metadata', async () => {
+  const updater = new EventEmitter();
+  updater.checkForUpdates = async () => assert.fail('unsupported build must not contact the updater');
+  const dialogs = [];
+  const releases = [];
+  const runtime = new UpdateRuntime({
+    updater,
+    dialog: { showMessageBox: async (options) => { dialogs.push(options); return { response: 0 }; } },
+    shell: { openExternal: async (url) => releases.push(url) },
+    app: { isPackaged: true, getVersion: () => '0.12.4' },
+    logger: { error() {} },
+  });
+
+  await runtime.check({ manual: true, available: false });
+  assert.equal(dialogs[0].title, 'Updates unavailable in this build');
+  assert.deepEqual(releases, [RELEASE_URL]);
 });
 
 test('Update Runtime surfaces a confirmed download failure without installing', async () => {

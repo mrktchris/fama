@@ -46,7 +46,9 @@ if (process.platform === 'win32') {
 const updateRuntime = new UpdateRuntime({ updater: autoUpdater, dialog, shell, app });
 
 function setupAutoUpdate(manualCheck) {
-  return updateRuntime.check({ manual: Boolean(manualCheck), packaged: app.isPackaged });
+  const updateMetadata = path.join(process.resourcesPath, 'app-update.yml');
+  const available = app.isPackaged && fs.existsSync(updateMetadata);
+  return updateRuntime.check({ manual: Boolean(manualCheck), available });
 }
 
 const PORT = 4317;
