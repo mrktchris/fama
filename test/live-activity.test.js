@@ -87,7 +87,7 @@ test('Live Activity Ingest tails selected-project BUZZ heartbeats live-only', (t
   const ingest = new LiveActivityIngest({
     projects: [{ id: 'hq', dir: path.join(root, 'claude'), cwd: root, name: 'HQ' }],
     codexSessionsDir: path.join(root, 'missing-codex'),
-    parseBuzzHeartbeat: (record) => [{ kind: 'agent_heartbeat', detail: record.client_summary }],
+    parseBuzzHeartbeat: (record) => [{ sessionId: 'buzz-frac7-max', kind: 'agent_heartbeat', detail: record.client_summary }],
     feed: { publish: (event) => events.push(event), snapshot: () => ({}) },
   });
 
@@ -98,4 +98,21 @@ test('Live Activity Ingest tails selected-project BUZZ heartbeats live-only', (t
   assert.equal(events[0].detail, 'New safe summary');
   assert.equal(events[0].provider, 'buzz');
   assert.equal(events[0].projectId, 'hq');
+  assert.equal(events[0].sessionId, 'hq:buzz-frac7-max');
+});
+
+test('Live Activity Ingest keeps the same BUZZ persona isolated across projects', () => {
+  const published = [];
+  const ingest = new LiveActivityIngest({
+    projects: [],
+    parseBuzzHeartbeat: () => [{ sessionId: 'buzz-frac7-max', kind: 'agent_heartbeat', detail: 'safe' }],
+    feed: { publish: (event) => published.push(event), snapshot: () => ({}) },
+  });
+
+  ingest._publishRecords([{}], { id: 'alpha', name: 'Alpha' }, 'buzz');
+  ingest._publishRecords([{}], { id: 'beta', name: 'Beta' }, 'buzz');
+  assert.deepEqual(published.map((event) => event.sessionId), [
+    'alpha:buzz-frac7-max',
+    'beta:buzz-frac7-max',
+  ]);
 });
