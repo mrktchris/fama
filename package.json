@@ -55,7 +55,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Fama-Setup.exe"
     },
     "publish": {
       "provider": "github",

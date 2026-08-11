@@ -103,6 +103,7 @@
   footer a { color: var(--muted); }
 
   code.inline { background: var(--panel); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 0.9em; }
+  .section-sub { color: var(--muted); font-size: 13.5px; margin: -16px 0 24px; }
 </style>
 </head>
 <body>
@@ -110,28 +111,10 @@
 <header class="hero">
   <div class="wrap">
     <div class="mascot-badge">
-      <svg viewBox="0 0 64 64" width="60" height="60">
-        <circle cx="32" cy="30" r="30" fill="#1a1510"/>
-        <g stroke="#b9853f" stroke-width="1.8" stroke-linecap="round">
-          <line x1="1" y1="26" x2="9" y2="25"/>
-          <line x1="2" y1="31" x2="10" y2="31"/>
-          <line x1="4" y1="36" x2="11" y2="34.5"/>
-          <line x1="63" y1="26" x2="55" y2="25"/>
-          <line x1="62" y1="31" x2="54" y2="31"/>
-          <line x1="60" y1="36" x2="53" y2="34.5"/>
-        </g>
-        <circle cx="32" cy="30" r="21" fill="none" stroke="#b9853f" stroke-width="2.5"/>
-        <g stroke="#3fa894" stroke-width="2.5" stroke-linecap="round" fill="none">
-          <line x1="15" y1="30" x2="15" y2="30"/>
-          <line x1="20" y1="25" x2="20" y2="35"/>
-          <line x1="25" y1="19" x2="25" y2="41"/>
-          <line x1="32" y1="12" x2="32" y2="48"/>
-          <line x1="39" y1="19" x2="39" y2="41"/>
-          <line x1="44" y1="25" x2="44" y2="35"/>
-          <line x1="49" y1="30" x2="49" y2="30"/>
-        </g>
-        <circle cx="32" cy="56" r="3.2" fill="#b9853f"/>
-      </svg>
+      <!-- Was a full duplicate of the SVG markup in icon-mark.svg, hand-copied
+           inline. Identical today, but two places to update on any icon
+           change is how these things drift eventually. One source of truth now. -->
+      <img src="icon-mark.svg" width="60" height="60" alt="Fama icon: a bronze ring around a verdigris soundwave">
     </div>
     <div class="kicker">Free &middot; open source &middot; local-first</div>
     <h1>Fama</h1>
@@ -139,10 +122,11 @@
     <p class="tagline">A live dashboard and voice for Claude Code. Watch and hear what it's doing, thinking, and running, as it happens, on your own machine.</p>
     <div class="privacy-badge">🔒 100% local by default &middot; nothing leaves your device unless you turn on optional cloud voice, with your own key</div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/mrktchris/fama/releases/latest">Download for Windows</a>
+      <a class="btn btn-primary" href="https://github.com/mrktchris/fama/releases/latest/download/Fama-Setup.exe">Download installer</a>
+      <a class="btn btn-secondary" href="https://github.com/mrktchris/fama/releases/latest/download/Fama-win32-x64.zip">Portable .zip</a>
       <a class="btn btn-secondary" href="https://github.com/mrktchris/fama">View on GitHub</a>
     </div>
-    <div class="meta-line">MIT licensed &middot; no account, no telemetry, no required API key &middot; installer or portable zip, your choice</div>
+    <div class="meta-line">MIT licensed &middot; no account, no telemetry, no required API key &middot; both links always point to the latest release</div>
   </div>
 </header>
 
@@ -202,14 +186,14 @@
 <section>
   <div class="wrap">
     <h2>Cleaned up, not read word for word</h2>
-    <p style="color:var(--muted); font-size:13.5px; margin-top:-16px; margin-bottom:24px;">The rewrite step works on any dense internal reasoning, not just code. Two examples:</p>
+    <p class="section-sub">The rewrite step works on any dense internal reasoning, not just code. Two examples:</p>
     <div class="quote-diff">
       <div class="tag">raw thinking</div>
       <div class="raw">"Okay so the naive fix here would be to just memoize this at the component level, but that's going to blow up the moment the parent re-renders with a new object reference, since the dependency array does referential equality, not deep equality, so I actually need to either hoist the computation up a level, wrap it in a stable callback, or just bite the bullet and normalize the state shape so this whole class of bug goes away instead of papering over one instance of it."</div>
       <div class="tag" style="margin-top:12px">spoken</div>
       <div class="spoken">"Memoizing here won't hold once the parent passes a new object reference. Better fix: normalize the state shape so this bug can't recur."</div>
     </div>
-    <div class="quote-diff" style="margin-top:16px;">
+    <div class="quote-diff" style="margin-top: 16px">
       <div class="tag">raw thinking</div>
       <div class="raw">"Looking at this campaign, blended ROAS reads fine at 3.2x, but that's brand and non-brand mixed together, and split out, non-brand is actually closer to 1.4x, which means most of the reported lift is really just people who were already going to convert anyway typing the brand name into Google, so before recommending we scale budget here I need a real incrementality read instead of trusting the platform-reported number at face value."</div>
       <div class="tag" style="margin-top:12px">spoken</div>
@@ -221,7 +205,7 @@
 <section>
   <div class="wrap">
     <h2>How it's different</h2>
-    <p style="color:var(--muted); font-size:13.5px; margin-top:-16px; margin-bottom:24px;">This isn't the first tool that gives Claude Code a voice, worth being upfront about that.</p>
+    <p class="section-sub">This isn't the first tool that gives Claude Code a voice, worth being upfront about that.</p>
     <table class="compare-table">
       <tr><th>Tool</th><th>Surface</th><th>Rewrites raw output</th><th>Persona / accent</th></tr>
       <tr><td>AgentVibes</td><td class="dim">CLI hooks, audio only</td><td class="dim">No</td><td class="dim">Preset voices only</td></tr>
