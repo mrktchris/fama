@@ -53,7 +53,8 @@ const SECRET_PATTERNS = [
 // Only scan text-ish files for secrets; scanning 100MB of Electron binaries is
 // pointless (and slow). A secret that matters here arrives as text.
 const TEXT_EXT = new Set(['.js', '.json', '.md', '.txt', '.env', '.example', '.html', '.css', '.yml', '.yaml', '.ps1', '.sh', '']);
-const MAX_SCAN_BYTES = 2 * 1024 * 1024;
+const SCAN_CHUNK_BYTES = 1024 * 1024;
+const SCAN_OVERLAP_BYTES = 4096;
 
 const problems = [];
 
@@ -68,7 +69,8 @@ function scanDir(dir, relRoot) {
     const full = path.join(dir, entry.name);
     const rel = path.relative(relRoot, full);
     if (entry.isDirectory()) {
-      if (FORBIDDEN_DIRS.has(entry.name)) {
+      const portableRel = rel.split(path.sep).join('/');
+      if ([...FORBIDDEN_DIRS].some((name) => entry.name === name || portableRel.endsWith(`/${name}`))) {
         problems.push(`FORBIDDEN DIRECTORY in package: ${rel}`);
         continue;
       }
@@ -85,29 +87,44 @@ function scanDir(dir, relRoot) {
     }
 
     if (!TEXT_EXT.has(ext)) continue;
-    let stat;
+    let fd;
     try {
-      stat = fs.statSync(full);
+      fd = fs.openSync(full, 'r');
     } catch {
       continue;
     }
-    if (stat.size > MAX_SCAN_BYTES) continue;
-    let content;
     try {
-      content = fs.readFileSync(full, 'utf8');
+      let overlap = Buffer.alloc(0);
+      const chunk = Buffer.alloc(SCAN_CHUNK_BYTES);
+      while (true) {
+        const bytesRead = fs.readSync(fd, chunk, 0, chunk.length, null);
+        if (!bytesRead) break;
+        const combined = Buffer.concat([overlap, chunk.subarray(0, bytesRead)]);
+        const content = combined.toString('utf8');
+        let found = false;
+        for (const pattern of SECRET_PATTERNS) {
+          if (pattern.re.test(content)) {
+            problems.push(`SECRET (${pattern.name}) found inside packaged file: ${rel}`);
+            found = true;
+          }
+        }
+        if (found) break;
+        overlap = combined.subarray(Math.max(0, combined.length - SCAN_OVERLAP_BYTES));
+      }
     } catch {
-      continue;
-    }
-    for (const pattern of SECRET_PATTERNS) {
-      if (pattern.re.test(content)) {
-        problems.push(`SECRET (${pattern.name}) found inside packaged file: ${rel}`);
+      // Keep scanning the rest if a build artifact disappears mid-verification.
+    } finally {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // already closed or disappeared
       }
     }
   }
 }
 
 if (!fs.existsSync(OUT_DIR)) {
-  console.error('[verify-package] dist-desktop does not exist, nothing to verify. Run packaging first.');
+  console.error(`[verify-package] ${OUT_DIR} does not exist, nothing to verify. Run packaging first.`);
   process.exit(1);
 }
 
@@ -120,7 +137,7 @@ for (const entry of fs.readdirSync(OUT_DIR, { withFileTypes: true })) {
 }
 
 if (!packagesChecked) {
-  console.error('[verify-package] no packaged output found in dist-desktop. Run packaging first.');
+  console.error(`[verify-package] no packaged output found in ${OUT_DIR}. Run packaging first.`);
   process.exit(1);
 }
 
