@@ -57,12 +57,28 @@ test('Cloud Narration settings sanitize persisted lines and never expose the key
   assert.equal(config.cloudVoice, true);
   assert.equal(saved.match(/^OPENAI_API_KEY=/gm).length, 1);
   assert.equal(saved.match(/^OPENAI_TTS_MODEL=/gm).length, 1);
+  assert.equal(config.model, 'gpt-4o-mini-tts');
+  assert.equal('modelDeprecated' in config, false);
+  assert.equal(config.pricing.checkedAt, '2026-08-11');
+  assert.equal(config.pricing.estimatedTtsPerChar['tts-1'], 0.000015);
+});
+
+test('Cloud Narration owns the pricing estimate and rejects unsupported provider models', async (t) => {
+  const cloud = fixture(t, async () => ({ ok: true, arrayBuffer: async () => Uint8Array.from([1]).buffer }));
+  const config = cloud.updateSettings({ model: 'made-up-expensive-model', rewriteModel: 'unknown-rewriter', rewrite: false });
+  assert.equal(config.model, 'gpt-4o-mini-tts');
+  assert.equal(config.rewriteModel, 'gpt-4o-mini');
+
+  cloud.updateSettings({ model: 'tts-1', rewrite: false });
+  await cloud.speak({ text: 'four', kind: 'text' });
+  assert.equal(cloud.usage().totalCost, 4 * 0.000015);
 });
 
 test('Cloud Narration returns a typed local fallback error when no key is configured', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fama-cloud-empty-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const cloud = new CloudNarration({ envPath: path.join(root, '.env'), usagePath: path.join(root, 'usage.json'), env: {} });
+  assert.equal(cloud.publicConfig().model, 'gpt-4o-mini-tts');
   await assert.rejects(cloud.speak({ text: 'hello' }), (error) => error instanceof CloudNarrationError && error.status === 501);
 });
 

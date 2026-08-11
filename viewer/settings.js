@@ -118,21 +118,22 @@
     manageProjectsBtn.addEventListener('click', () => window.famaDesktop.manageProjects());
   }
 
-  // Mirrors the server's own PRICE_PER_CHAR table (server.js) exactly, on
-  // purpose: these two fell out of sync when gpt-4o-mini-tts was added here
-  // without a matching entry, so the estimate shown before you save quietly
-  // didn't match what the usage tracker recorded after. If you change one,
-  // change the other, that mismatch was a real, confirmed bug, not a
-  // hypothetical one.
+  // Pricing comes from the Cloud Narration Module through /config. Keeping the
+  // provider knowledge server-side prevents the preview and recorded usage
+  // from drifting into two different estimates again.
   const CHARS_PER_WORD = 5.5;
-  const PRICE_PER_CHAR = { 'tts-1': 0.000015, 'tts-1-hd': 0.00003, 'gpt-4o-mini-tts': 0.000012 }; // keep in sync with server.js's own table
+  let pricePerChar = {};
   function updateLengthReadout() {
     const seconds = Number(lengthSlider.value);
     const words = Math.max(6, Math.round(seconds * 2.5));
     const chars = Math.round(words * CHARS_PER_WORD);
-    const price = PRICE_PER_CHAR[modelSelect.value] || PRICE_PER_CHAR['tts-1-hd'];
-    const cost = chars * price;
     lengthReadout.textContent = `~${seconds}s, ~${words} words`;
+    const price = pricePerChar[modelSelect.value];
+    if (!Number.isFinite(price)) {
+      lengthCost.textContent = 'Cost estimate is loading from the local narration service.';
+      return;
+    }
+    const cost = chars * price;
     lengthCost.textContent = `~$${cost.toFixed(4)} estimated per line at ${modelSelect.value}, more length is directly more credits`;
   }
   lengthSlider.addEventListener('input', updateLengthReadout);
@@ -247,7 +248,8 @@
     fetch('/config')
       .then((r) => r.json())
       .then((cfg) => {
-        modelSelect.value = cfg.model || 'tts-1-hd';
+        modelSelect.value = cfg.model || 'gpt-4o-mini-tts';
+        pricePerChar = cfg.pricing && cfg.pricing.estimatedTtsPerChar ? cfg.pricing.estimatedTtsPerChar : {};
         voiceSelect.value = cfg.voice || 'alloy';
         rewriteCheckbox.checked = cfg.rewrite !== false;
         lengthSlider.min = cfg.narrationMin || 3;

@@ -14,7 +14,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { stableProjectId } = require('../lib/selected-projects');
 
-const PORT = 4399; // distinct from the real app's 4317, avoids colliding with a running instance
+let port;
 let serverProcess;
 let authToken;
 let watchDir;
@@ -26,7 +26,7 @@ function request(urlPath, options = {}) {
     const req = http.request(
       {
         hostname: options.host || '127.0.0.1',
-        port: PORT,
+        port,
         path: urlPath,
         method: options.method || 'GET',
         headers: options.headers || {},
@@ -40,6 +40,17 @@ function request(urlPath, options = {}) {
     req.on('error', reject);
     if (options.body) req.write(options.body);
     req.end();
+  });
+}
+
+function reserveEphemeralPort() {
+  return new Promise((resolve, reject) => {
+    const probe = http.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      probe.close((error) => (error ? reject(error) : resolve(address.port)));
+    });
   });
 }
 
@@ -63,7 +74,7 @@ function waitForSseEvent(predicate, trigger) {
       reject(new Error('timed out waiting for SSE event'));
     }, 5000);
     const req = http.request(
-      { hostname: '127.0.0.1', port: PORT, path: '/events', method: 'GET' },
+      { hostname: '127.0.0.1', port, path: '/events', method: 'GET' },
       (res) => {
         response = res;
         res.setEncoding('utf8');
@@ -118,9 +129,13 @@ before(async () => {
     `${JSON.stringify({ timestamp: '2026-08-11T00:00:00Z', type: 'session_meta', payload: { id: 'codex-live-test', cwd: watchDir } })}\n`,
     'utf8'
   );
+  // A fixed test port made concurrent Claude/Codex audits interfere: one run
+  // could connect to a stale child while its own server exited on EADDRINUSE.
+  // Reserve an OS-selected port per process, then wait for teardown below.
+  port = await reserveEphemeralPort();
   serverProcess = spawn('node', [path.join(__dirname, '..', 'server.js')], {
     env: Object.assign({}, process.env, {
-      PORT: String(PORT),
+      PORT: String(port),
       CLAUDE_NARRATOR_DIR: watchDir,
       FAMA_PROJECT_CWD: watchDir,
       FAMA_PROJECT_LABEL: 'integration-project',
@@ -136,12 +151,16 @@ before(async () => {
   authToken = match[1];
 });
 
-after(() => {
-  if (serverProcess) serverProcess.kill();
+after(async () => {
+  if (!serverProcess || serverProcess.exitCode !== null) return;
+  await new Promise((resolve) => {
+    serverProcess.once('exit', resolve);
+    serverProcess.kill();
+  });
 });
 
 test('legitimate Host header: / returns 200', async () => {
-  const res = await request('/', { headers: { Host: `127.0.0.1:${PORT}` } });
+  const res = await request('/', { headers: { Host: `127.0.0.1:${port}` } });
   assert.equal(res.status, 200);
 });
 
