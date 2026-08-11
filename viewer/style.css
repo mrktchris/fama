@@ -594,6 +594,20 @@ body.view-conversation .k-text .row-detail { font-size: calc(var(--feed-font-siz
 
 /* Activity view keeps the same complete event DOM, but compresses it into an
    operator-friendly stream instead of maintaining a second render path. */
+/* The two views are projections, not duplicate feeds: Messages is the
+   conversation surface, while Activity is the technical trace. Keep one DOM
+   so live updates, disclosure state, and accessibility remain consistent,
+   but hide rows that do not belong to the selected projection. */
+body.view-conversation .row[data-kind="thinking"],
+body.view-conversation .row[data-kind="tool"],
+body.view-conversation .row[data-kind="result"],
+body.view-conversation .row[data-kind="error"],
+body.view-conversation .row[data-kind="system"],
+body.view-conversation .row[data-kind="agent_heartbeat"] { display: none; }
+body.view-activity .row[data-kind="prompt"],
+body.view-activity .row[data-kind="text"],
+body.view-activity .row[data-kind="image"] { display: none; }
+
 body.view-activity .lane-feed { gap: 2px; padding: 8px; font-family: var(--mono); line-height: 1.45; }
 body.view-activity .row { padding: 3px 5px; gap: 7px; border-radius: 7px; }
 body.view-activity .row:hover { background: rgba(255, 255, 255, 0.025); }
