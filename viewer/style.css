@@ -121,6 +121,19 @@ header h1 {
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
+#manage-projects {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+#manage-projects:hover { border-color: var(--muted-2); color: var(--text); }
+
 #header-actions {
   margin-left: auto;
   display: flex;

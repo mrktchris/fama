@@ -10,4 +10,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('famaDesktop', {
   getPrefs: () => ipcRenderer.invoke('get-app-prefs'),
   setPrefs: (partial) => ipcRenderer.invoke('set-app-prefs', partial),
+  // Was only reachable via the system tray's "Manage watched projects…"
+  // item, easy to never notice it's there. Reuses that exact same flow
+  // (hide the main window, open onboarding pre-checked with whatever's
+  // already watched) from a button inside the app itself.
+  manageProjects: () => ipcRenderer.invoke('open-manage-projects'),
 });

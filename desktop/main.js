@@ -588,6 +588,14 @@ ipcMain.handle('confirm-projects', async (event, encodedList) => {
 ipcMain.handle('get-app-prefs', () => getPrefs());
 ipcMain.handle('set-app-prefs', (event, partial) => setPrefs(partial || {}));
 
+// Same flow as the tray's "Manage watched projects…" item, just reachable
+// from inside the main window instead of only the tray, which nobody
+// reliably discovers on their own.
+ipcMain.handle('open-manage-projects', () => {
+  if (mainWindow) mainWindow.hide();
+  openOnboardingWindow();
+});
+
 // --- desktop shortcut ----------------------------------------------------
 //
 // electron-packager (used here because electron-builder's NSIS step can't

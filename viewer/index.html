@@ -41,6 +41,11 @@
 
     <h1>Fama</h1>
     <span id="status">connecting&hellip;</span>
+    <!-- Electron-only, same reasoning as the desktop-app-only settings section:
+         meaningless in a plain browser tab (npm start), which can't spawn a
+         native folder picker or manage the server's watch list at runtime.
+         Hidden by default, shown by app.js only if window.famaDesktop exists. -->
+    <button id="manage-projects" type="button" title="Add or remove watched projects" class="hidden">&#128193; projects</button>
 
     <div id="header-actions">
       <span id="voice-mode" title="Which voice backend is active"></span>

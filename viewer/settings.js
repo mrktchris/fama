@@ -106,6 +106,15 @@
     });
   }
 
+  // Project selector button, header: same Electron-gated pattern as above.
+  // Was tray-only ("Manage watched projects…"), which is easy to never find
+  // on your own — this surfaces the same flow directly in the app.
+  const manageProjectsBtn = document.getElementById('manage-projects');
+  if (window.famaDesktop && window.famaDesktop.manageProjects) {
+    manageProjectsBtn.classList.remove('hidden');
+    manageProjectsBtn.addEventListener('click', () => window.famaDesktop.manageProjects());
+  }
+
   // Mirrors the server's own PRICE_PER_CHAR table (server.js) exactly, on
   // purpose: these two fell out of sync when gpt-4o-mini-tts was added here
   // without a matching entry, so the estimate shown before you save quietly
