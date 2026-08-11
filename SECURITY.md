@@ -4,6 +4,12 @@
 
 This is a small, actively-developed project with no long-term-support branches. Security fixes land on the latest release only; if you're running an older version, update first before reporting, the issue may already be fixed.
 
+## Release integrity
+
+Official downloads come only from this repository's GitHub Releases page. Each stable release includes `SHA256SUMS.txt`, a CycloneDX SBOM, and GitHub/Sigstore-signed build and SBOM attestations. The tagged-release workflow rebuilds on GitHub-hosted Windows runners, runs tests and the dependency audit, and scans the unpacked app for credential patterns and forbidden files before upload.
+
+The Windows binaries are not currently Authenticode-signed. SmartScreen may therefore warn on first launch; the project does not claim a signing certificate it does not possess. See the README's **Verify a release** section for hash and attestation commands.
+
 ## Reporting a vulnerability
 
 **Please don't open a public GitHub issue for a security report.** Use GitHub's private vulnerability reporting instead: go to this repo's **Security** tab → **Report a vulnerability**. That opens a private advisory only the maintainer can see until it's resolved, so a real issue doesn't sit exposed while a fix is worked out.

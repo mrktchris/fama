@@ -3,8 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fama — hear your Claude Code agent think, live</title>
-<meta name="description" content="A local, always-on dashboard and voice for Claude Code. Hear your agent think, out loud, live, as it works.">
+<title>Fama — a live local dashboard and voice for Claude Code and Codex</title>
+<meta name="description" content="See and hear Claude Code and Codex work live in a local-first Windows desktop dashboard.">
+<meta name="theme-color" content="#080b12">
+<link rel="canonical" href="https://mrktchris.github.io/fama/">
+<meta property="og:title" content="Fama — see and hear your coding agents work live">
+<meta property="og:description" content="A local-first Windows desktop dashboard and optional voice for Claude Code and Codex.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mrktchris.github.io/fama/">
+<meta property="og:image" content="https://mrktchris.github.io/fama/screenshot-dashboard.png">
 <link rel="icon" href="icon-mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,35 +121,24 @@
     </div>
     <div class="kicker">Free &middot; open source &middot; local-first</div>
     <h1>Fama</h1>
-    <p class="tagline">Hear your agent think, live. A local dashboard and voice for Claude Code — watch and hear what it's doing, thinking, and running, as it happens, on your own machine.</p>
+    <p class="tagline">See and hear your coding agents work, live. One local dashboard for Claude Code and Codex, on your own machine.</p>
     <div class="privacy-badge">🔒 100% local by default &middot; nothing leaves your device unless you turn on optional cloud voice, with your own key</div>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/mrktchris/fama/releases/latest/download/Fama-Setup.exe">Download installer</a>
       <a class="btn btn-secondary" href="https://github.com/mrktchris/fama/releases/latest/download/Fama-win32-x64.zip">Portable .zip</a>
       <a class="btn btn-secondary" href="https://github.com/mrktchris/fama">View on GitHub</a>
     </div>
-    <div class="meta-line">MIT licensed &middot; no account, no telemetry, no required API key &middot; both links always point to the latest release</div>
+    <div class="meta-line">MIT licensed &middot; no account, no telemetry, no required API key &middot; SHA-256 checksums and signed build provenance included</div>
   </div>
 </header>
 
 <section>
   <div class="wrap">
     <h2>See it, hear it</h2>
-    <div class="shot-pending" id="shot-dashboard">
-      <div class="icon">&#128421;</div>
-      <div class="label">Screenshot coming</div>
-      <div class="path">docs/screenshot-dashboard.png</div>
-    </div>
-    <p class="shot-caption">The live dashboard: one lane per active Claude Code session, updating in real time.</p>
-    <div class="shot-pending" id="shot-settings">
-      <div class="icon">&#9881;</div>
-      <div class="label">Screenshot coming</div>
-      <div class="path">docs/screenshot-settings.png</div>
-    </div>
+    <img class="shot" src="screenshot-dashboard.png" alt="Fama showing live Claude Code and Codex conversations in the Messages view">
+    <p class="shot-caption">Messages stays readable at a glance; Activity keeps tool calls and results one click away.</p>
+    <img class="shot" src="screenshot-settings.png" alt="Fama settings for local and optional cloud voice, narration, and appearance">
     <p class="shot-caption">Voice, persona, and accent, all configurable, with a live cost estimate as you adjust.</p>
-    <!-- Drop real PNGs at docs/screenshot-dashboard.png and docs/screenshot-settings.png, then replace each
-         .shot-pending div above with <img class="shot" src="screenshot-dashboard.png" alt="..."> (and same
-         for settings). Until then this renders as an intentional placeholder, not a broken image icon. -->
   </div>
 </section>
 
@@ -156,7 +152,7 @@
       </div>
       <div class="feature">
         <h3>Watch several projects at once</h3>
-        <p>Not locked to one folder, check as many Claude Code projects as you want, each lane tagged with which project it's from, drag to reorder, rename any lane to whatever you'll actually remember it by.</p>
+        <p>Not locked to one folder or provider: follow selected Claude Code and Codex projects, see where each lane came from, drag to reorder, and rename lanes.</p>
       </div>
       <div class="feature">
         <h3>Spoken narration</h3>
@@ -173,6 +169,10 @@
       <div class="feature">
         <h3>Make it yours</h3>
         <p>Accent color, feed text size, a compact layout, hide the mascot, reduce motion — all in Settings, apply instantly, no reload.</p>
+      </div>
+      <div class="feature">
+        <h3>Downloads you can verify</h3>
+        <p>Every release includes SHA-256 checksums, a CycloneDX SBOM, and GitHub/Sigstore-signed build provenance.</p>
       </div>
     </div>
   </div>
