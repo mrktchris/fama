@@ -2,7 +2,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { encodedSelectionFromConfig } = require('../lib/selected-projects');
+const {
+  encodedSelectionFromConfig,
+  selectedProjectsFromEncoded,
+  selectedProjectsFromSelection,
+} = require('../lib/selected-projects');
 
 const DEFAULT_PREFS = Object.freeze({ notificationsEnabled: true, launchOnStartup: false });
 const SETTABLE_PREF_KEYS = Object.freeze(['notificationsEnabled', 'launchOnStartup']);
@@ -57,6 +61,18 @@ class RuntimeConfigStore {
 
   encodedSelection(projectDirFromEncoded) {
     return encodedSelectionFromConfig(this.load(), projectDirFromEncoded);
+  }
+
+  runtimeProjects(dependencies) {
+    const config = this.load();
+    if (Array.isArray(config.selectedProjects)) {
+      const canonical = selectedProjectsFromSelection(config.selectedProjects, dependencies);
+      if (canonical.length) return canonical;
+    }
+    return selectedProjectsFromEncoded(
+      encodedSelectionFromConfig(config, dependencies.projectDirFromEncoded),
+      dependencies
+    );
   }
 
   setSelectedProjects(projects) {

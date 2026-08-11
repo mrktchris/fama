@@ -22,6 +22,29 @@ test('Desktop Runtime config preserves unrelated state and filters renderer pref
   assert.deepEqual(store.load().selectedProjects, [{ encoded: '-project' }]);
 });
 
+test('Desktop Runtime preserves a browsed project cwd when rebuilding the server watch list', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fama-runtime-projects-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = new RuntimeConfigStore(path.join(root, 'config.json'));
+  const documents = path.resolve(root, 'Documents');
+  const encoded = 'encoded-documents';
+  const transcriptDir = path.resolve(root, 'transcripts', encoded);
+  store.save({
+    selectedProjects: [{ id: 'saved', encoded, dir: transcriptDir, cwd: documents, name: 'Documents' }],
+  });
+
+  const projects = store.runtimeProjects({
+    projectDirFromEncoded: (candidate) => (candidate === encoded ? transcriptDir : null),
+    realCwdFor: () => null,
+    encodeProjectDir: (candidate) => (candidate === documents ? encoded : 'unexpected'),
+  });
+
+  assert.equal(projects.length, 1);
+  assert.equal(projects[0].cwd, documents);
+  assert.equal(projects[0].dir, transcriptDir);
+  assert.equal(projects[0].name, 'Documents');
+});
+
 test('LocalServerRuntime passes one canonical project payload and stops the previous child', async () => {
   const children = [];
   const optionsSeen = [];
