@@ -1,8 +1,14 @@
 # Generates desktop/icon.ico (multi-res, for the exe/taskbar/window) and
 # desktop/icon.png (256x256, for the tray) purely with .NET System.Drawing,
-# no external tools or paid image-gen credits needed. Draws the Fama icon
-# mark (bronze ring, verdigris waveform, oxide ground) so this matches
-# viewer/icon-mark.svg, the same mark used for the app's own favicon.
+# no external tools or paid image-gen credits needed (no SVG rasterizer
+# exists in this build environment, confirmed: no ImageMagick, no rsvg-convert,
+# no Inkscape). Draws the exact geometry from the provided
+# fama_claude_handoff/05_assets/fama-app-icon.svg (rounded-square deep-space
+# background, four-facet crystal glyph, blue/iris/cyan gradient, soft glow),
+# translated from its 1024-unit SVG coordinate space into System.Drawing
+# calls (GraphicsPath polygons + LinearGradientBrush + a stacked-blur
+# approximation for the glow, since System.Drawing has no native Gaussian
+# blur filter).
 
 Add-Type -AssemblyName System.Drawing
 
@@ -12,51 +18,71 @@ function New-IconMarkBitmap([int]$size) {
   $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
   $g.Clear([System.Drawing.Color]::Transparent)
 
-  $s = $size / 64.0
-  $oxide = [System.Drawing.Color]::FromArgb(255, 0x1a, 0x15, 0x10)
-  $bronze = [System.Drawing.Color]::FromArgb(255, 0xb9, 0x85, 0x3f)
-  $verdigris = [System.Drawing.Color]::FromArgb(255, 0x3f, 0xa8, 0x94)
+  # Source SVG is a 1024-unit grid; scale everything by size/1024 so the
+  # geometry below is a direct copy of the real asset's coordinates, not a
+  # reinterpretation at a different scale.
+  $s = $size / 1024.0
+  function P([double]$x, [double]$y) { return New-Object System.Drawing.PointF(($x * $s), ($y * $s)) }
 
-  # oxide disc, fills the whole icon so it reads clearly on any Windows theme
-  $g.FillEllipse((New-Object System.Drawing.SolidBrush($oxide)), 1 * $s, 0 * $s, 62 * $s, 60 * $s)
+  # --- background: rounded square, deep-space radial gradient (#1A2340 -> #080B12) ---
+  $bgRectPx = 64 * $s
+  $bgSizePx = 896 * $s
+  $bgRadiusPx = [Math]::Max(2, 220 * $s)
+  $bgPath = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $d = $bgRadiusPx * 2
+  $bgPath.AddArc($bgRectPx, $bgRectPx, $d, $d, 180, 90)
+  $bgPath.AddArc($bgRectPx + $bgSizePx - $d, $bgRectPx, $d, $d, 270, 90)
+  $bgPath.AddArc($bgRectPx + $bgSizePx - $d, $bgRectPx + $bgSizePx - $d, $d, $d, 0, 90)
+  $bgPath.AddArc($bgRectPx, $bgRectPx + $bgSizePx - $d, $d, $d, 90, 90)
+  $bgPath.CloseFigure()
+  # PathGradientBrush gives a true radial gradient from a center point, matching
+  # the SVG's radialGradient (center-out: lighter #1A2340 to dark #080B12 edge).
+  $bgBrush = New-Object System.Drawing.Drawing2D.PathGradientBrush($bgPath)
+  $bgBrush.CenterColor = [System.Drawing.Color]::FromArgb(255, 0x1A, 0x23, 0x40)
+  $bgBrush.SurroundColors = @([System.Drawing.Color]::FromArgb(255, 0x08, 0x0B, 0x12))
+  $bgBrush.CenterPoint = (P 512 420)
+  $g.FillPath($bgBrush, $bgPath)
 
-  # small wing ticks flanking the ring, and a bronze drop below, matching
-  # the brand brief's Icon Mark reference image
-  $wingPen = New-Object System.Drawing.Pen($bronze, [Math]::Max(1.2, 1.8 * $s))
-  $wingPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $wingPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $g.DrawLine($wingPen, (1 * $s), (26 * $s), (9 * $s), (25 * $s))
-  $g.DrawLine($wingPen, (2 * $s), (31 * $s), (10 * $s), (31 * $s))
-  $g.DrawLine($wingPen, (4 * $s), (36 * $s), (11 * $s), (34.5 * $s))
-  $g.DrawLine($wingPen, (63 * $s), (26 * $s), (55 * $s), (25 * $s))
-  $g.DrawLine($wingPen, (62 * $s), (31 * $s), (54 * $s), (31 * $s))
-  $g.DrawLine($wingPen, (60 * $s), (36 * $s), (53 * $s), (34.5 * $s))
+  # --- crystal facet gradient (white -> aurora blue -> crystal iris -> aether cyan) ---
+  $gradStart = P 310 236
+  $gradEnd = P 706 800
+  $facetBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($gradStart, $gradEnd, [System.Drawing.Color]::White, [System.Drawing.Color]::White)
+  $blend = New-Object System.Drawing.Drawing2D.ColorBlend(4)
+  $blend.Colors = @(
+    [System.Drawing.Color]::FromArgb(255, 0xF4, 0xF7, 0xFB),
+    [System.Drawing.Color]::FromArgb(255, 0x7C, 0x9D, 0xFF),
+    [System.Drawing.Color]::FromArgb(255, 0x8B, 0x7C, 0xFF),
+    [System.Drawing.Color]::FromArgb(255, 0x6E, 0xE7, 0xF2)
+  )
+  $blend.Positions = @(0.0, 0.35, 0.68, 1.0)
+  $facetBrush.InterpolationColors = $blend
 
-  # bronze ring, the artifact
-  $ringPen = New-Object System.Drawing.Pen($bronze, [Math]::Max(1.5, 2.5 * $s))
-  $g.DrawEllipse($ringPen, (11 * $s), (9 * $s), (42 * $s), (42 * $s))
-
-  # verdigris waveform, the live signal, seven bars of varying height forming
-  # a simple soundwave silhouette across the middle of the ring
-  $barHeights = @(0, 5, 11, 18, 11, 5, 0)   # half-heights, mirrored above/below center
-  $xs = @(15, 20, 25, 32, 39, 44, 49)
-  $wavePen = New-Object System.Drawing.Pen($verdigris, [Math]::Max(1.4, 2.5 * $s))
-  $wavePen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $wavePen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  for ($i = 0; $i -lt $xs.Count; $i++) {
-    $x = $xs[$i] * $s
-    $h = [Math]::Max(1, $barHeights[$i]) * $s
-    $g.DrawLine($wavePen, $x, (30 * $s - $h), $x, (30 * $s + $h))
+  # Soft glow behind the top facet: no native Gaussian blur in System.Drawing,
+  # approximated by stacking the same shape several times at increasing size
+  # and decreasing opacity, close enough at icon sizes.
+  $topFacet = [System.Drawing.PointF[]]@((P 512 218), (P 714 340), (P 615 395), (P 512 331), (P 409 395), (P 310 340))
+  for ($i = 6; $i -ge 1; $i--) {
+    $growPx = $i * 6 * $s
+    $grown = $topFacet | ForEach-Object { New-Object System.Drawing.PointF(($_.X), ($_.Y - $growPx * 0.15)) }
+    $alpha = [int](10 + (6 - $i) * 3)
+    $glowBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($alpha, 0x7C, 0x9D, 0xFF))
+    $g.FillPolygon($glowBrush, $grown)
+    $glowBrush.Dispose()
   }
 
-  # bronze drop, the wax-seal-like anchor point below the ring
-  $g.FillEllipse((New-Object System.Drawing.SolidBrush($bronze)), (29 * $s), (53 * $s), (6 * $s), (6 * $s))
+  # --- the four facets themselves ---
+  $g.FillPolygon($facetBrush, $topFacet)
+  $g.FillPolygon($facetBrush, [System.Drawing.PointF[]]@((P 310 340), (P 472 432), (P 472 786), (P 364 664)))
+  $g.FillPolygon($facetBrush, [System.Drawing.PointF[]]@((P 714 340), (P 552 432), (P 552 786), (P 660 664)))
+  $centerBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 0xF4, 0xF7, 0xFB))
+  $g.FillPolygon($centerBrush, [System.Drawing.PointF[]]@((P 472 432), (P 512 456), (P 552 432), (P 552 786), (P 512 850), (P 472 786)))
 
+  $facetBrush.Dispose(); $centerBrush.Dispose(); $bgBrush.Dispose(); $bgPath.Dispose()
   $g.Dispose()
   return $bmp
 }
 
-$outDir = $PSScriptRoot  # was hard-coded to one machine's path, broke for any contributor cloning elsewhere
+$outDir = $PSScriptRoot
 
 # tray icon, flat PNG
 $png256 = New-IconMarkBitmap 256

@@ -1,27 +1,20 @@
 <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-  <!-- Fama icon mark: bronze ring, verdigris waveform, small wing ticks and
-       a bronze drop below, matching the brand brief's Icon Mark reference.
-       Used as favicon, and as the source for desktop/generate-icon.ps1's
-       .ico build. -->
-  <circle cx="32" cy="30" r="30" fill="#1A1510"/>
-  <!-- wing ticks flanking the ring -->
-  <g stroke="#B9853F" stroke-width="1.8" stroke-linecap="round">
-    <line x1="1" y1="26" x2="9" y2="25"/>
-    <line x1="2" y1="31" x2="10" y2="31"/>
-    <line x1="4" y1="36" x2="11" y2="34.5"/>
-    <line x1="63" y1="26" x2="55" y2="25"/>
-    <line x1="62" y1="31" x2="54" y2="31"/>
-    <line x1="60" y1="36" x2="53" y2="34.5"/>
-  </g>
-  <circle cx="32" cy="30" r="21" fill="none" stroke="#B9853F" stroke-width="2.5"/>
-  <g stroke="#3FA894" stroke-width="2.5" stroke-linecap="round" fill="none">
-    <line x1="15" y1="30" x2="15" y2="30"/>
-    <line x1="20" y1="25" x2="20" y2="35"/>
-    <line x1="25" y1="19" x2="25" y2="41"/>
-    <line x1="32" y1="12" x2="32" y2="48"/>
-    <line x1="39" y1="19" x2="39" y2="41"/>
-    <line x1="44" y1="25" x2="44" y2="35"/>
-    <line x1="49" y1="30" x2="49" y2="30"/>
-  </g>
-  <circle cx="32" cy="56" r="3.2" fill="#B9853F"/>
+  <!-- Fama icon mark: faceted crystal glyph on a deep-space ground, scaled
+       down from the 512-unit source (fama_claude_handoff/05_assets/fama-mark.svg)
+       to this file's 64-unit coordinate system. Used as favicon, and as the
+       source for desktop/generate-icon.ps1's .ico build.
+       Replaces the old bronze-ring/verdigris-waveform "bird" mark, 2026-08-10 rebrand. -->
+  <defs>
+    <linearGradient id="g" x1="19.4" y1="14.75" x2="44.1" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4F7FB"/>
+      <stop offset="0.35" stop-color="#7C9DFF"/>
+      <stop offset="0.68" stop-color="#8B7CFF"/>
+      <stop offset="1" stop-color="#6EE7F2"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="30" r="30" fill="#080B12"/>
+  <path fill="url(#g)" d="M32 13.6 L44.6 21.25 L38.4 24.7 L32 20.7 L25.6 24.7 L19.4 21.25 Z"/>
+  <path fill="url(#g)" d="M19.4 21.25 L29.5 27 L29.5 49.1 L22.75 41.5 Z"/>
+  <path fill="url(#g)" d="M44.6 21.25 L34.5 27 L34.5 49.1 L41.25 41.5 Z"/>
+  <path fill="#F4F7FB" d="M29.5 27 L32 28.5 L34.5 27 L34.5 49.1 L32 53.1 L29.5 49.1 Z"/>
 </svg>

@@ -506,7 +506,7 @@ function openMainWindow() {
     height: 640,
     minWidth: 420,
     minHeight: 400,
-    backgroundColor: '#1a1510',
+    backgroundColor: '#080b12',
     title: 'Fama',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
@@ -539,7 +539,7 @@ function openOnboardingWindow() {
     width: 460,
     height: 560,
     resizable: false,
-    backgroundColor: '#1a1510',
+    backgroundColor: '#080b12',
     title: 'Fama setup',
     icon: path.join(__dirname, 'icon.png'), // found live: this window had no icon set, fell back to Electron's default
     webPreferences: {

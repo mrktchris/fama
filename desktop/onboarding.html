@@ -6,8 +6,8 @@
 <style>
   :root {
     color-scheme: dark;
-    --bg: #1a1510; --panel: #221b13; --border: #3a2f1f; --text: #f4eee1;
-    --muted: #b6ac99; --muted-2: #7d7565; --accent: #b9853f; --accent-glow: rgba(185, 133, 63, .35);
+    --bg: #080b12; --panel: #111827; --border: rgba(255,255,255,.08); --text: #f4f7fb;
+    --muted: #b9c3d2; --muted-2: #7f8a9b; --accent: #7c9dff; --accent-glow: rgba(124, 157, 255, .35);
   }
   * { box-sizing: border-box; }
   body {
@@ -24,7 +24,7 @@
     font-family: inherit; font-size: 12.5px; display: flex; align-items: flex-start; gap: 10px;
   }
   .project-option:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
-  .project-option.checked { border-color: var(--accent); background: rgba(185, 133, 63, 0.08); }
+  .project-option.checked { border-color: var(--accent); background: rgba(124, 157, 255, 0.08); }
   .project-option input[type="checkbox"] { margin-top: 2px; accent-color: var(--accent); flex: 0 0 auto; }
   .project-option .text { min-width: 0; }
   .project-option .path { font-weight: 600; word-break: break-all; }

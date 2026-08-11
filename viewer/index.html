@@ -7,27 +7,31 @@
 <link rel="icon" href="/icon-mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Cinzel only: this app's own style.css never references EB Garamond, that's
-     landing-page-only (docs/index.html), fetching it here was dead weight on
-     every launch, found by security audit while checking this exact link. -->
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+<!-- Inter only, per the Aurora/Crystal brand system's type spec (UI: Inter /
+     SF Pro Display / system-ui). Replaces the retired Cinzel display face. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header>
     <div class="mascot idle" id="mascot" aria-hidden="true">
+      <!-- Crystal-spark status indicator, replaces the old bird mascot
+           (2026-08-10 rebrand). Same class hooks as before (.body/.crest/
+           .wing/.beak/.eye/.think-dots), mascot.js's state toggling is
+           unchanged; only the shapes and what they mean visually changed:
+           a faceted crystal (matches icon-mark.svg) instead of a bird. -->
       <div class="mascot-ring">
         <svg viewBox="0 0 64 64" width="30" height="30">
           <g class="bob">
-            <path class="wing" d="M18 32 Q6 36 11 50 Q21 47 23 36 Z" />
-            <path class="body" d="M32 6 C18 6 10 20 10 34 C10 49 19 60 32 60 C45 60 54 49 54 34 C54 20 46 6 32 6 Z" />
-            <path class="crest" d="M27 6 L22 -3 L33 1 Z" />
-            <path class="beak" d="M50 29 L60 32 Q63 34 60 36 L50 39 Q54 34 50 29 Z" />
-            <circle class="eye" cx="39" cy="26" r="4.2" />
+            <path class="body" d="M32 27 L44 34 L44 55 L32 62 L20 55 L20 34 Z" />
+            <path class="crest" d="M32 8 L46 20 L38 25 L32 20 L26 25 L18 20 Z" />
+            <path class="wing" d="M18 20 L26 25 L26 50 L20 45 Z" />
+            <path class="beak" d="M46 20 L38 25 L38 50 L44 45 Z" />
+            <circle class="eye" cx="32" cy="34" r="3" />
             <g class="think-dots">
-              <circle cx="48" cy="4" r="2" />
-              <circle cx="55" cy="-2" r="2" />
-              <circle cx="61" cy="-9" r="2" />
+              <circle cx="10" cy="14" r="2" />
+              <circle cx="4" cy="22" r="2" />
+              <circle cx="2" cy="31" r="2" />
             </g>
           </g>
         </svg>
@@ -164,11 +168,11 @@
         <label class="settings-field">
           <span>Accent color</span>
           <div class="swatch-row" id="accent-swatches">
-            <button type="button" class="swatch" data-accent="#b9853f" data-glow="185, 133, 63" title="Bronze (default)" style="background:#b9853f"></button>
-            <button type="button" class="swatch" data-accent="#3fa894" data-glow="63, 168, 148" title="Verdigris" style="background:#3fa894"></button>
-            <button type="button" class="swatch" data-accent="#5a8fd6" data-glow="90, 143, 214" title="Slate blue" style="background:#5a8fd6"></button>
-            <button type="button" class="swatch" data-accent="#c9576b" data-glow="201, 87, 107" title="Rose" style="background:#c9576b"></button>
-            <button type="button" class="swatch" data-accent="#7fa650" data-glow="127, 166, 80" title="Moss" style="background:#7fa650"></button>
+            <button type="button" class="swatch" data-accent="#7c9dff" data-glow="124, 157, 255" title="Aurora blue (default)" style="background:#7c9dff"></button>
+            <button type="button" class="swatch" data-accent="#8b7cff" data-glow="139, 124, 255" title="Crystal iris" style="background:#8b7cff"></button>
+            <button type="button" class="swatch" data-accent="#6ee7f2" data-glow="110, 231, 242" title="Aether cyan" style="background:#6ee7f2"></button>
+            <button type="button" class="swatch" data-accent="#c6b7ff" data-glow="198, 183, 255" title="Moon lilac" style="background:#c6b7ff"></button>
+            <button type="button" class="swatch" data-accent="#ffd39a" data-glow="255, 211, 154" title="Dawn gold" style="background:#ffd39a"></button>
           </div>
         </label>
 

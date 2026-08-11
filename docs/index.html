@@ -8,23 +8,24 @@
 <link rel="icon" href="icon-mark.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet">
+<!-- Inter only, per the Aurora/Crystal brand system. Replaces the retired
+     Cinzel/EB Garamond bronze-era pairing. -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     color-scheme: dark;
-    --bg: #1a1510; --panel: #221b13; --panel-2: #2a2116; --border: #3a2f1f; --border-soft: #2c2418;
-    --text: #f4eee1; --muted: #b6ac99; --muted-2: #7d7565;
-    --accent: #b9853f; --accent-glow: rgba(185, 133, 63, .35);
-    --thinking: #c9a55c; --tool: #a47234; --result: #3fa894;
-    --sans: "Segoe UI", "Inter", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
-    --display: "Cinzel", "Segoe UI", serif;
-    --serif: "EB Garamond", Georgia, serif;
+    --bg: #080b12; --panel: #111827; --panel-2: #1b2433; --border: rgba(255,255,255,.08); --border-soft: rgba(255,255,255,.06);
+    --text: #f4f7fb; --muted: #b9c3d2; --muted-2: #7f8a9b;
+    --accent: #7c9dff; --accent-glow: rgba(124, 157, 255, .35);
+    --thinking: #ffd39a; --tool: #8b7cff; --result: #6ee7f2;
+    --sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    --mono: "SFMono-Regular", ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    --display: "Inter", "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    margin: 0; background: radial-gradient(circle at 50% -10%, #241d14 0%, var(--bg) 55%) fixed;
+    margin: 0; background: radial-gradient(circle at 50% -10%, #1a2340 0%, var(--bg) 55%) fixed;
     color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; line-height: 1.6;
   }
   .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
@@ -40,12 +41,7 @@
     font-family: var(--display); font-size: clamp(34px, 7vw, 56px); margin: 0 0 8px;
     font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   }
-  .myth-line {
-    font-family: var(--serif); font-style: italic; color: var(--muted); font-size: 15px;
-    max-width: 480px; margin: 0 auto 20px;
-  }
-  .myth-line .true { color: var(--result); font-style: normal; }
-  .tagline { font-size: 18px; color: var(--muted); max-width: 560px; margin: 0 auto 36px; }
+  .tagline { font-size: 18px; color: var(--muted); max-width: 560px; margin: 0 auto 20px; }
   .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .btn {
     display: inline-flex; align-items: center; gap: 8px; padding: 13px 24px; border-radius: 10px;
@@ -53,13 +49,13 @@
     transition: transform 0.15s ease, border-color 0.15s ease;
   }
   .btn:hover { transform: translateY(-1px); }
-  .btn-primary { background: var(--accent); color: #170f08; border-color: var(--accent); }
+  .btn-primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   .btn-secondary { background: var(--panel); color: var(--text); }
   .btn-secondary:hover { border-color: var(--muted-2); }
   .meta-line { margin-top: 16px; font-size: 12.5px; color: var(--muted-2); }
   .privacy-badge {
     display: inline-block; margin: 0 auto 22px; padding: 8px 16px; border-radius: 999px;
-    border: 1px solid rgba(63, 168, 148, 0.35); background: rgba(63, 168, 148, 0.08);
+    border: 1px solid rgba(110, 231, 242, 0.35); background: rgba(110, 231, 242, 0.08);
     color: var(--result); font-size: 12.5px; font-weight: 600;
   }
 
@@ -82,7 +78,7 @@
 
   .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
   .feature {
-    background: linear-gradient(180deg, var(--panel) 0%, #170f08 100%); border: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%); border: 1px solid var(--border);
     border-radius: 12px; padding: 20px;
   }
   .feature h3 { font-size: 14.5px; margin: 0 0 8px; color: var(--text); }
@@ -114,12 +110,11 @@
       <!-- Was a full duplicate of the SVG markup in icon-mark.svg, hand-copied
            inline. Identical today, but two places to update on any icon
            change is how these things drift eventually. One source of truth now. -->
-      <img src="icon-mark.svg" width="60" height="60" alt="Fama icon: a bronze ring around a verdigris soundwave">
+      <img src="icon-mark.svg" width="60" height="60" alt="Fama icon: a faceted crystal glyph in aurora blue and aether cyan">
     </div>
     <div class="kicker">Free &middot; open source &middot; local-first</div>
     <h1>Fama</h1>
-    <p class="myth-line">The house of bronze that hears every word and speaks it back — except this one only repeats <span class="true">what's true</span>.</p>
-    <p class="tagline">A live dashboard and voice for Claude Code. Watch and hear what it's doing, thinking, and running, as it happens, on your own machine.</p>
+    <p class="tagline">Hear your agent think, live. A local dashboard and voice for Claude Code — watch and hear what it's doing, thinking, and running, as it happens, on your own machine.</p>
     <div class="privacy-badge">🔒 100% local by default &middot; nothing leaves your device unless you turn on optional cloud voice, with your own key</div>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/mrktchris/fama/releases/latest/download/Fama-Setup.exe">Download installer</a>

@@ -26,7 +26,7 @@
   try {
     const saved = JSON.parse(localStorage.getItem(ACCENT_KEY));
     if (saved && saved.hex) applyAccent(saved.hex, saved.glow);
-    else swatches[0] && swatches[0].classList.add('active'); // bronze default, matches the CSS default already in place
+    else swatches[0] && swatches[0].classList.add('active'); // aurora blue default, matches the CSS default already in place
   } catch {
     swatches[0] && swatches[0].classList.add('active');
   }
