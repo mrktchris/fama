@@ -611,7 +611,13 @@ const server = http.createServer((req, res) => {
 
         let spokenText = rawText;
         let rewriteUsage = null;
-        const shouldRewrite = ttsConfig.rewrite && (kind === 'thinking' || kind === 'text');
+        // A full rewrite round-trip (a real, non-streamed chat-completion call,
+        // typically 0.5-2s on its own) has nothing to actually condense when
+        // the raw text is already at or under the target length — skipping it
+        // for those lines is a pure latency win, one full network hop cut,
+        // with zero quality tradeoff, since there was nothing to shorten.
+        const alreadyShort = rawText.trim().split(/\s+/).length <= narrationPreset(ttsConfig.narrationSeconds).words;
+        const shouldRewrite = ttsConfig.rewrite && (kind === 'thinking' || kind === 'text') && !alreadyShort;
         if (shouldRewrite) {
           try {
             const result = await rewriteForSpeech(rawText, kind);
