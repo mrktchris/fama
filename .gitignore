@@ -4,7 +4,13 @@ run.pid
 electron.pid
 dist-desktop/
 .env
+.env.*
+!.env.example
 usage.json
+*.pem
+*.key
+*.p12
+*.pfx
 *.mp3
 .DS_Store
 Thumbs.db

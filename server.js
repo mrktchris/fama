@@ -25,12 +25,14 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { FileTailer } = require('./lib/tail');
+const { voiceStyleInstructions } = require('./lib/voice-style');
+const { redactSensitiveText } = require('./lib/redact');
 
 // A fresh random token per process, required as a header on every route that
 // mutates anything or spends money. Not persisted anywhere, not needed to be:
 // it only has to prove the caller is the actual page this server just served,
-// not some other tab/site. Delivered to the page by injecting it into
-// index.html at serve time (see the static handler below), so only same-
+// not some other tab/site. Delivered by a same-origin, no-store /auth.js
+// response before the application scripts load, so only same-
 // origin JS ever sees it, a cross-origin fetch can't read a response to
 // extract it, and a plain <form> POST (the classic no-JS CSRF vector) can't
 // set a custom header at all. Found missing entirely by external review:
@@ -245,6 +247,7 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4317;
 const ACTIVE_WINDOW_MS = 15 * 60 * 1000; // a session file counts as "active" if touched in the last 15 min
 const POLL_MS = 250; // how often we check transcripts for new lines, kept tight on purpose, see README
 const BACKLOG_SIZE = 300;
+const BACKLOG_MAX_BYTES = 2 * 1024 * 1024;
 const MAX_SPEECH_CHARS = 900; // hard backstop, comfortably above even the 20s preset's typical output
 
 function resolveWatchDir() {
@@ -283,13 +286,18 @@ function resolveWatchProjects() {
 const watchProjects = resolveWatchProjects();
 
 const backlog = [];
+let backlogBytes = 0;
 const sseClients = new Set();
 const tailers = new Map(); // filePath -> FileTailer
 
 function broadcast(event) {
-  backlog.push(event);
-  if (backlog.length > BACKLOG_SIZE) backlog.shift();
   const payload = `data: ${JSON.stringify(event)}\n\n`;
+  const bytes = Buffer.byteLength(payload);
+  backlog.push({ payload, bytes });
+  backlogBytes += bytes;
+  while (backlog.length > 1 && (backlog.length > BACKLOG_SIZE || backlogBytes > BACKLOG_MAX_BYTES)) {
+    backlogBytes -= backlog.shift().bytes;
+  }
   for (const res of sseClients) res.write(payload);
 }
 
@@ -402,6 +410,14 @@ scanForActiveSessions();
 
 // --- optional cloud voice: rewrite + text-to-speech (OpenAI) ---------------
 
+const PROVIDER_TIMEOUT_MS = 30000;
+
+function providerErrorMessage(err) {
+  let message = redactSensitiveText(String((err && err.message) || err || 'unknown provider error'));
+  if (ttsConfig.apiKey) message = message.split(ttsConfig.apiKey).join('[redacted credential]');
+  return message.replace(/[\r\n]+/g, ' ').slice(0, 300);
+}
+
 async function rewriteForSpeech(text, kind) {
   const context =
     kind === 'thinking'
@@ -436,6 +452,7 @@ async function rewriteForSpeech(text, kind) {
       max_tokens: preset.maxTokens,
       temperature: 0.2,
     }),
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
   });
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
@@ -465,11 +482,7 @@ async function synthesizeSpeech(text, speed) {
   // input gets expanded into an actual directive rather than sent as-is,
   // the field stays free text, this just gives the model more to act on.
   if (ttsConfig.voiceStyle && ttsConfig.model === 'gpt-4o-mini-tts') {
-    const style = ttsConfig.voiceStyle.trim();
-    payload.instructions =
-      style.split(/\s+/).length <= 3
-        ? `Speak with a ${style} accent and tone, natural and clearly audible, not subtle.`
-        : style;
+    payload.instructions = voiceStyleInstructions(ttsConfig.voiceStyle);
   }
   const resp = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
@@ -478,6 +491,7 @@ async function synthesizeSpeech(text, speed) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
   });
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '');
@@ -527,6 +541,28 @@ function publicConfig() {
 
 const viewerDir = path.join(__dirname, 'viewer');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "media-src 'self' blob:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'none'",
+].join('; ');
+
+function applySecurityHeaders(res) {
+  res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=(), serial=()');
+}
 
 // Binding to 127.0.0.1 (see listen() below) stops other MACHINES, not other
 // WEBSITES: a page from any origin can rebind its own hostname's DNS record
@@ -540,12 +576,22 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]);
 
 const server = http.createServer((req, res) => {
+  applySecurityHeaders(res);
   if (!ALLOWED_HOSTS.has(String(req.headers.host || '').toLowerCase())) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     res.end('forbidden host');
     return;
   }
-  if (req.url === '/events') {
+  let requestPath;
+  try {
+    requestPath = new URL(req.url, `http://${req.headers.host}`).pathname;
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('bad request');
+    return;
+  }
+
+  if (requestPath === '/events' && req.method === 'GET') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -565,7 +611,7 @@ const server = http.createServer((req, res) => {
         projects: watchProjects.map((p) => ({ id: p.id, name: p.name })),
       })}\n\n`
     );
-    for (const event of backlog) res.write(`data: ${JSON.stringify(event)}\n\n`);
+    for (const item of backlog) res.write(item.payload);
     sseClients.add(res);
     req.on('close', () => sseClients.delete(res));
     return;
@@ -573,17 +619,18 @@ const server = http.createServer((req, res) => {
 
   // Never echoes ttsConfig.apiKey back, only whether one is set. The browser
   // never needs the real value, and never gets it after Settings saves one.
-  if (req.url === '/config' && req.method === 'GET') {
+  if (requestPath === '/config' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(publicConfig()));
     return;
   }
 
-  if (req.url === '/client-error' && req.method === 'POST') {
+  if (requestPath === '/client-error' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then((body) => {
-        console.error(`[client] ${(body && body.message) || 'unknown client error'}`);
+        const message = redactSensitiveText((body && body.message) || 'unknown client error').replace(/[\r\n]+/g, ' ').slice(0, 500);
+        console.error(`[client] ${message}`);
         res.writeHead(204);
         res.end();
       })
@@ -594,13 +641,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.url === '/usage' && req.method === 'GET') {
+  if (requestPath === '/usage' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(usage));
     return;
   }
 
-  if (req.url === '/usage/reset' && req.method === 'POST') {
+  if (requestPath === '/usage/reset' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
     usage = { totalCost: 0, ttsCalls: 0, ttsChars: 0, rewriteCalls: 0, rewriteTokens: 0, since: new Date().toISOString() };
     saveUsage();
@@ -609,7 +656,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.url === '/settings' && req.method === 'POST') {
+  if (requestPath === '/settings' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then((body) => {
@@ -647,12 +694,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.url === '/speak' && req.method === 'POST') {
+  if (requestPath === '/speak' && req.method === 'POST') {
     if (!requireAuth(req, res)) return;
     readJsonBody(req)
       .then(async (body) => {
-        const rawText = (body && body.text ? String(body.text) : '').slice(0, MAX_SPEECH_CHARS);
-        const kind = typeof body.kind === 'string' ? body.kind : 'text';
+        const rawText = redactSensitiveText(body && body.text ? String(body.text) : '').slice(0, MAX_SPEECH_CHARS);
+        const kind = body && ['thinking', 'text', 'tool'].includes(body.kind) ? body.kind : 'text';
+        const speechSpeed = clampSpeed(body && body.speed);
         if (!rawText) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'no text' }));
@@ -676,7 +724,7 @@ const server = http.createServer((req, res) => {
         if (shouldRewrite) {
           try {
             const result = await rewriteForSpeech(rawText, kind);
-            if (result.text) spokenText = result.text;
+            if (result.text) spokenText = redactSensitiveText(result.text).slice(0, MAX_SPEECH_CHARS);
             rewriteUsage = result;
           } catch (err) {
             // rewrite hiccuped, speak the raw text rather than drop the line
@@ -685,9 +733,9 @@ const server = http.createServer((req, res) => {
 
         try {
           console.log(
-            `[speak] kind=${kind} chars=${spokenText.length} speed=${body.speed || 1} model=${ttsConfig.model} narrationSeconds=${ttsConfig.narrationSeconds}`
+            `[speak] kind=${kind} chars=${spokenText.length} speed=${speechSpeed} model=${ttsConfig.model} narrationSeconds=${ttsConfig.narrationSeconds}`
           );
-          const audio = await synthesizeSpeech(spokenText, body.speed);
+          const audio = await synthesizeSpeech(spokenText, speechSpeed);
           recordUsage({
             ttsChars: spokenText.length,
             ttsModel: ttsConfig.model,
@@ -697,11 +745,6 @@ const server = http.createServer((req, res) => {
           res.writeHead(200, {
             'Content-Type': 'audio/mpeg',
             'Content-Length': audio.length,
-            // Diagnostic only, this header is not what gets synthesized, the
-            // full spokenText already went into synthesizeSpeech() above.
-            // Sliced only to stay a well-behaved HTTP header, not to truncate
-            // the audio, MAX_SPEECH_CHARS (900) is the real ceiling.
-            'X-Spoken-Text': encodeURIComponent(spokenText.slice(0, 900)),
           });
           res.end(audio);
         } catch (err) {
@@ -709,7 +752,7 @@ const server = http.createServer((req, res) => {
           // fragment of the key that was sent (e.g. on an invalid/revoked
           // key). That's fine to log locally, not fine to echo back over
           // the HTTP response, which is visible to devtools/Network tab.
-          console.error(`[speak] failed: ${String((err && err.message) || err).slice(0, 300)}`);
+          console.error(`[speak] failed: ${providerErrorMessage(err)}`);
           res.writeHead(502, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'speech synthesis failed, see server log for detail' }));
         }
@@ -721,9 +764,30 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let filePath = req.url === '/' ? '/index.html' : req.url;
-  filePath = path.join(viewerDir, path.normalize(filePath).replace(/^(\.\.[/\\])+/, ''));
-  if (!filePath.startsWith(viewerDir)) {
+  if (requestPath === '/auth.js' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
+    res.end(`window.__FAMA_TOKEN__=${JSON.stringify(AUTH_TOKEN)};`);
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'text/plain', Allow: 'GET, HEAD' });
+    res.end('method not allowed');
+    return;
+  }
+
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(requestPath).replace(/\\/g, '/');
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('bad path');
+    return;
+  }
+  const relativePath = decodedPath === '/' ? 'index.html' : decodedPath.replace(/^\/+/, '');
+  const filePath = path.resolve(viewerDir, relativePath);
+  const relativeToViewer = path.relative(viewerDir, filePath);
+  if (relativeToViewer === '..' || relativeToViewer.startsWith(`..${path.sep}`) || path.isAbsolute(relativeToViewer)) {
     res.writeHead(403);
     res.end('forbidden');
     return;
@@ -735,16 +799,10 @@ const server = http.createServer((req, res) => {
       res.end('not found');
       return;
     }
-    // index.html gets the auth token injected at serve time, this is the
-    // ONLY place it's ever handed out, and only to same-origin page loads,
-    // a cross-origin fetch can't read this response body to extract it.
-    if (path.basename(filePath) === 'index.html') {
-      data = Buffer.from(
-        data.toString('utf8').replace('</head>', `<script>window.__FAMA_TOKEN__=${JSON.stringify(AUTH_TOKEN)};</script></head>`)
-      );
-    }
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-    res.end(data);
+    const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+    if (path.basename(filePath) === 'index.html') headers['Cache-Control'] = 'no-store';
+    res.writeHead(200, headers);
+    res.end(req.method === 'HEAD' ? undefined : data);
   });
 });
 

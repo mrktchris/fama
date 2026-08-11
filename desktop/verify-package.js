@@ -24,7 +24,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const OUT_DIR = path.join(__dirname, '..', 'dist-desktop');
+// An explicit directory lets CI/review builds verify an isolated package
+// without overwriting a currently-running local installation.
+const OUT_DIR = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(__dirname, '..', 'dist-desktop');
 
 // Filenames that must never appear anywhere in a built package.
 const FORBIDDEN_NAMES = new Set(['.env', '.env.local', '.env.production', 'usage.json', 'run.pid', 'electron.pid']);
@@ -42,6 +46,8 @@ const SECRET_PATTERNS = [
   { name: 'OpenAI API key', re: /sk-[A-Za-z0-9_-]{20,}/ },
   { name: 'AWS access key', re: /AKIA[0-9A-Z]{16}/ },
   { name: 'GitHub token', re: /gh[pousr]_[A-Za-z0-9]{30,}/ },
+  { name: 'GitHub fine-grained token', re: /github_pat_[A-Za-z0-9_]{20,}/ },
+  { name: 'Google API key', re: /AIza[0-9A-Za-z_-]{30,}/ },
   { name: 'Private key block', re: /-----BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/ },
 ];
 // Only scan text-ish files for secrets; scanning 100MB of Electron binaries is

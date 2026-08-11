@@ -9,16 +9,16 @@
  * which coding project to watch, since a double-clicked desktop app has
  * no "directory you launched it from" the way the CLI version does.
  *
- * Known limitation, v1, documented rather than hidden: this assumes Node.js
- * is already installed and on PATH. Bundling a Node runtime so the app needs
- * zero prerequisites is a real fast-follow, not done here.
+ * The child server runs through Electron's bundled Node runtime, so packaged
+ * users do not need a separate Node.js install or a trustworthy PATH entry.
  */
 
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, Notification, shell } = require('electron');
-const { spawn, exec } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const { pathToFileURL } = require('url');
 const { autoUpdater } = require('electron-updater');
 
 // Found by audit: with no single-instance lock, double-clicking the exe again
@@ -183,6 +183,7 @@ let onboardingWindow = null;
 let tray = null;
 let notifyReq = null; // live connection to our own /events SSE feed, for native notifications
 let shortcutOfferedThisRun = false;
+const hardenedSessions = new WeakSet();
 
 function loadConfig() {
   try {
@@ -193,7 +194,12 @@ function loadConfig() {
 }
 function saveConfig(cfg) {
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), { encoding: 'utf8', mode: 0o600 });
+  try {
+    fs.chmodSync(CONFIG_PATH, 0o600);
+  } catch {
+    // Windows ACLs govern this per-user directory instead.
+  }
 }
 
 // App-level prefs (notifications, launch-on-startup) live in the same
@@ -239,7 +245,12 @@ function applyLoginItemSetting(openAtLogin) {
 // tested module. Both files ship together in every build regardless
 // (electron-packager copies the whole project), so nothing was ever gained
 // by keeping them independent.
-const { encodeProjectDir, claudeProjectsRoot } = require(path.join(ROOT, 'lib', 'paths'));
+const { encodeProjectDir, claudeProjectsRoot, projectDirFromEncoded } = require(path.join(ROOT, 'lib', 'paths'));
+
+function validEncodedProjects(value) {
+  const candidates = Array.isArray(value) ? value : [value];
+  return [...new Set(candidates.filter((encoded) => projectDirFromEncoded(encoded)))];
+}
 
 // Reads a project folder's real path from inside its own transcript data
 // (the "cwd" field every record already carries) rather than trying to
@@ -280,7 +291,6 @@ function realCwdFor(projectDir) {
       fd = fs.openSync(file.full, 'r');
       const buf = Buffer.alloc(16384); // room for several bookkeeping lines before the first real record
       const bytesRead = fs.readSync(fd, buf, 0, 16384, 0);
-      fs.closeSync(fd);
       const lines = buf.toString('utf8', 0, bytesRead).split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
@@ -294,6 +304,14 @@ function realCwdFor(projectDir) {
       }
     } catch {
       continue;
+    } finally {
+      if (fd !== undefined) {
+        try {
+          fs.closeSync(fd);
+        } catch {
+          // File disappeared between discovery and read; try another one.
+        }
+      }
     }
   }
   return null;
@@ -351,11 +369,12 @@ async function startServer(watchDirsEncoded) {
   await stopServer();
   // Accept a single encoded dir too (older config, or a direct call), always
   // work internally as a list, one server can now watch several projects.
-  const encodedList = Array.isArray(watchDirsEncoded) ? watchDirsEncoded : [watchDirsEncoded];
-  const projectDirs = encodedList.map((encoded) => path.join(claudeProjectsRoot(), encoded));
+  const encodedList = validEncodedProjects(watchDirsEncoded);
+  if (!encodedList.length) throw new Error('No valid project directories were selected.');
+  const projectDirs = encodedList.map((encoded) => projectDirFromEncoded(encoded));
   const projectCwds = projectDirs.map((dir, i) => realCwdFor(dir) || encodedList[i]);
   const projectLabels = projectCwds.map((cwd) => path.basename(cwd));
-  serverProcess = spawn('node', [path.join(ROOT, 'server.js')], {
+  serverProcess = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     // Real key ended up in a shipped release asset because the packaged app
     // wrote .env next to server.js, inside its own resources folder, by
     // default. This routes it into Electron's actual per-user data dir
@@ -368,6 +387,10 @@ async function startServer(watchDirsEncoded) {
       CLAUDE_NARRATOR_DIRS: JSON.stringify(projectDirs),
       FAMA_PROJECT_CWDS: JSON.stringify(projectCwds),
       FAMA_PROJECT_LABELS: JSON.stringify(projectLabels),
+      // Electron already ships a compatible Node runtime. Using it avoids a
+      // separate prerequisite and prevents PATH from selecting an unrelated
+      // or attacker-controlled node.exe.
+      ELECTRON_RUN_AS_NODE: '1',
     }),
     windowsHide: true,
   });
@@ -375,14 +398,13 @@ async function startServer(watchDirsEncoded) {
   serverProcess.stdout.on('data', (d) => console.log(`[server] ${d}`.trim()));
   serverProcess.stderr.on('data', (d) => console.error(`[server] ${d}`.trim()));
   serverProcess.on('exit', (code) => console.log(`[server] exited with code ${code}`));
-  // Found by audit: spawn() with no 'error' listener means a missing `node`
-  // binary (the one documented prerequisite this app has) threw an unhandled
-  // exception and took down the entire Electron main process, silently, no
-  // window, no dialog. This is the single most likely first-run dead end.
+  // Keep startup failure explicit even though the server now uses Electron's
+  // bundled Node runtime. Corrupt/incomplete installations can still make the
+  // child process fail before any window is ready to explain what happened.
   serverProcess.on('error', (err) => {
     dialog.showErrorBox(
       'Fama could not start',
-      `Failed to launch the local server: ${err.message}\n\nThis usually means Node.js isn't installed or isn't on your PATH. Get it from nodejs.org, then relaunch Fama.`
+       `Failed to launch the bundled local server: ${err.message}\n\nRestart Fama. If this persists, reinstall the latest release.`
     );
   });
 }
@@ -504,7 +526,77 @@ function disconnectNotifyStream() {
 
 let isQuitting = false;
 
+function hardenSession(session) {
+  if (hardenedSessions.has(session)) return;
+  hardenedSessions.add(session);
+  session.setPermissionCheckHandler(() => false);
+  session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+  if (typeof session.setDevicePermissionHandler === 'function') session.setDevicePermissionHandler(() => false);
+  session.on('will-download', (event) => event.preventDefault());
+}
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function hardenWindowNavigation(window, allowedNavigation) {
+  hardenSession(window.webContents.session);
+  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  window.webContents.on('will-navigate', (event, url) => {
+    if (!allowedNavigation(url)) event.preventDefault();
+  });
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    const externalUrl = safeExternalUrl(url);
+    if (externalUrl) {
+      shell.openExternal(externalUrl).catch((err) => console.error('[navigation] failed to open external URL', err));
+      return { action: 'deny' };
+    }
+    if (/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          autoHideMenuBar: true,
+          webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false },
+        },
+      };
+    }
+    return { action: 'deny' };
+  });
+}
+
+function isLocalAppUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' && url.port === String(PORT) && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+  } catch {
+    return false;
+  }
+}
+
+function assertIpcSender(event, expectedWindow) {
+  if (!expectedWindow || expectedWindow.isDestroyed() || event.sender !== expectedWindow.webContents) {
+    throw new Error('Rejected IPC call from an unexpected renderer.');
+  }
+}
+
+function loadMainApp(window, attemptsLeft = 15) {
+  window.loadURL(`http://localhost:${PORT}`).catch(() => {
+    if (attemptsLeft > 0 && !window.isDestroyed()) setTimeout(() => loadMainApp(window, attemptsLeft - 1), 300);
+  });
+}
+
 function openMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    loadMainApp(mainWindow);
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
   mainWindow = new BrowserWindow({
     width: 780,
     height: 640,
@@ -515,12 +607,16 @@ function openMainWindow() {
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webviewTag: false,
       spellcheck: true,
       autoplayPolicy: 'no-user-gesture-required',
       preload: path.join(__dirname, 'preload-main.js'),
     },
   });
   mainWindow.setMenuBarVisibility(false);
+  hardenWindowNavigation(mainWindow, isLocalAppUrl);
   // Closing the window hides it, doesn't quit, that's the whole point of the
   // tray icon: this keeps narrating in the background until you actually quit.
   mainWindow.on('close', (event) => {
@@ -530,15 +626,15 @@ function openMainWindow() {
     }
   });
   // Server takes a moment to bind, retry the load rather than race it.
-  const tryLoad = (attemptsLeft) => {
-    mainWindow.loadURL(`http://localhost:${PORT}`).catch(() => {
-      if (attemptsLeft > 0) setTimeout(() => tryLoad(attemptsLeft - 1), 300);
-    });
-  };
-  tryLoad(15);
+  loadMainApp(mainWindow);
 }
 
 function openOnboardingWindow() {
+  if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+    onboardingWindow.show();
+    onboardingWindow.focus();
+    return;
+  }
   onboardingWindow = new BrowserWindow({
     width: 460,
     height: 560,
@@ -549,14 +645,24 @@ function openOnboardingWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webviewTag: false,
     },
   });
   onboardingWindow.setMenuBarVisibility(false);
-  onboardingWindow.loadFile(path.join(__dirname, 'onboarding.html'));
+  const onboardingPath = path.join(__dirname, 'onboarding.html');
+  const onboardingUrl = pathToFileURL(onboardingPath).href;
+  hardenWindowNavigation(onboardingWindow, (url) => url === onboardingUrl);
+  onboardingWindow.loadFile(onboardingPath);
 }
 
-ipcMain.handle('list-projects', () => listAvailableProjects());
-ipcMain.handle('pick-folder', async () => {
+ipcMain.handle('list-projects', (event) => {
+  assertIpcSender(event, onboardingWindow);
+  return listAvailableProjects();
+});
+ipcMain.handle('pick-folder', async (event) => {
+  assertIpcSender(event, onboardingWindow);
   const result = await dialog.showOpenDialog(onboardingWindow, { properties: ['openDirectory'] });
   if (result.canceled || !result.filePaths[0]) return null;
   return { encoded: encodeProjectDir(result.filePaths[0]), path: result.filePaths[0], lastActive: Date.now() };
@@ -567,13 +673,17 @@ ipcMain.handle('pick-folder', async () => {
 // than first-run setup.
 function currentProjects() {
   const cfg = loadConfig() || {};
-  if (Array.isArray(cfg.watchDirsEncoded)) return cfg.watchDirsEncoded;
-  if (cfg.watchDirEncoded) return [cfg.watchDirEncoded]; // pre-multi-folder config
+  if (Array.isArray(cfg.watchDirsEncoded)) return validEncodedProjects(cfg.watchDirsEncoded);
+  if (cfg.watchDirEncoded) return validEncodedProjects(cfg.watchDirEncoded); // pre-multi-folder config
   return [];
 }
-ipcMain.handle('get-current-projects', () => currentProjects());
+ipcMain.handle('get-current-projects', (event) => {
+  assertIpcSender(event, onboardingWindow);
+  return currentProjects();
+});
 ipcMain.handle('confirm-projects', async (event, encodedList) => {
-  const list = Array.isArray(encodedList) ? encodedList.filter(Boolean) : [];
+  assertIpcSender(event, onboardingWindow);
+  const list = Array.isArray(encodedList) ? validEncodedProjects(encodedList) : [];
   if (!list.length) return false; // nothing selected, caller should keep the window open
   // Merge, don't replace: this used to overwrite the whole config file with
   // just the watched dir(s), silently dropping notificationsEnabled and
@@ -589,13 +699,20 @@ ipcMain.handle('confirm-projects', async (event, encodedList) => {
   return true;
 });
 
-ipcMain.handle('get-app-prefs', () => getPrefs());
-ipcMain.handle('set-app-prefs', (event, partial) => setPrefs(partial || {}));
+ipcMain.handle('get-app-prefs', (event) => {
+  assertIpcSender(event, mainWindow);
+  return getPrefs();
+});
+ipcMain.handle('set-app-prefs', (event, partial) => {
+  assertIpcSender(event, mainWindow);
+  return setPrefs(partial || {});
+});
 
 // Same flow as the tray's "Manage watched projects…" item, just reachable
 // from inside the main window instead of only the tray, which nobody
 // reliably discovers on their own.
-ipcMain.handle('open-manage-projects', () => {
+ipcMain.handle('open-manage-projects', (event) => {
+  assertIpcSender(event, mainWindow);
   if (mainWindow) mainWindow.hide();
   openOnboardingWindow();
 });
@@ -605,28 +722,26 @@ ipcMain.handle('open-manage-projects', () => {
 // electron-packager (used here because electron-builder's NSIS step can't
 // run in this build environment, see README) produces a plain folder, no
 // installer, so nothing puts an icon on the Desktop the way a real installer
-// would. This does it directly via PowerShell's WScript.Shell COM object,
-// the same mechanism Windows shortcuts (.lnk) are made with, no extra tools.
+// would. Electron's native shortcut API creates it without invoking a shell.
 function desktopShortcutPath() {
-  const desktop = path.join(app.getPath('home'), 'Desktop');
-  return path.join(desktop, 'Fama.lnk');
+  return path.join(app.getPath('desktop'), 'Fama.lnk');
 }
 function createDesktopShortcut() {
-  if (!app.isPackaged) return Promise.resolve(false); // dev mode: nothing sane to point a shortcut at
+  if (!app.isPackaged || process.platform !== 'win32') return Promise.resolve(false);
   const target = process.execPath; // Fama.exe itself, icon is already embedded at package time
   const linkPath = desktopShortcutPath();
-  const psCommand =
-    `$s = New-Object -ComObject WScript.Shell; ` +
-    `$lnk = $s.CreateShortcut('${linkPath.replace(/'/g, "''")}'); ` +
-    `$lnk.TargetPath = '${target.replace(/'/g, "''")}'; ` +
-    `$lnk.WorkingDirectory = '${path.dirname(target).replace(/'/g, "''")}'; ` +
-    `$lnk.Save()`;
-  return new Promise((resolve) => {
-    exec(`powershell -NoProfile -NonInteractive -Command "${psCommand}"`, (err) => {
-      if (err) console.error('[shortcut] failed', err);
-      resolve(!err);
-    });
-  });
+  try {
+    return Promise.resolve(
+      shell.writeShortcutLink(linkPath, 'replace', {
+        target,
+        cwd: path.dirname(target),
+        description: 'Open Fama',
+      })
+    );
+  } catch (err) {
+    console.error('[shortcut] failed', err);
+    return Promise.resolve(false);
+  }
 }
 // Offered once per run, only the first time this machine ever finishes
 // onboarding (tracked in config.json), and only if nothing's already there,
@@ -642,8 +757,10 @@ function offerDesktopShortcut() {
     return;
   }
   createDesktopShortcut().then((ok) => {
-    saveConfig(Object.assign({}, loadConfig(), { desktopShortcutOffered: true }));
-    if (ok) notify('Fama', 'Added a Fama shortcut to your Desktop.');
+    if (ok) {
+      saveConfig(Object.assign({}, loadConfig(), { desktopShortcutOffered: true }));
+      notify('Fama', 'Added a Fama shortcut to your Desktop.');
+    }
   });
 }
 
@@ -682,12 +799,7 @@ app.whenReady().then(async () => {
   // upgrading users don't get dropped back into onboarding; currentProjects()
   // normalizes both shapes everywhere else, but the very first read has to
   // happen before that helper's defined below, so it's inlined here too.
-  const config = loadConfig();
-  const initialProjects = config && Array.isArray(config.watchDirsEncoded)
-    ? config.watchDirsEncoded
-    : config && config.watchDirEncoded
-      ? [config.watchDirEncoded]
-      : [];
+  const initialProjects = currentProjects();
   if (initialProjects.length) {
     await startServer(initialProjects);
     openMainWindow();

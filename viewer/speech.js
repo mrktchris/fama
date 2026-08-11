@@ -44,6 +44,8 @@
     this.cloudVoice = false;
     this._chain = Promise.resolve();
     this._audioEl = null;
+    this._audioUrl = null;
+    this._audioCancel = null;
     this._controller = null; // in-flight cloud fetch, abortable
     this._generation = 0; // bumped by stop(), a resolving fetch from a prior
     // generation is a stale result, not something that should ever start
@@ -126,43 +128,47 @@
     say(text, kind) {
       if (!this.enabled || !text) return;
       if (this.pending >= MAX_PENDING) return; // drop, this is a live feed, not a transcript to catch up on
+      const generation = this._generation;
       this.pending += 1;
       this.onStateChange && this.onStateChange(true);
       this._chain = this._chain
-        .then(() => this._speakOne(text, kind))
+        .then(() => this._speakOne(text, kind, generation))
         .catch(() => {}) // one bad utterance shouldn't jam the chain for the next one
         .then(() => {
           this.pending = Math.max(0, this.pending - 1);
           this.onStateChange && this.onStateChange(this.pending > 0);
         });
     },
-    async _speakOne(text, kind) {
+    async _speakOne(text, kind, generation) {
+      if (generation !== this._generation || !this.enabled) return;
       if (this.cloudVoice) {
         try {
-          await this._speakCloud(text, kind);
+          await this._speakCloud(text, kind, generation);
           return;
         } catch (err) {
+          if (generation !== this._generation || (err && err.name === 'AbortError')) return;
           // server hiccup, rate limit, bad key, whatever, fall back rather than
           // go silent for this line. Reported server-side (not just console.log)
           // since a client-only log is invisible to anyone debugging this remotely.
           reportClientError('cloud speak failed, falling back to local: ' + (err && err.message));
         }
       }
+      if (generation !== this._generation || !this.enabled) return;
       try {
         await this._speakLocal(text);
       } catch (err) {
         reportClientError('local speak failed too, this line went unheard: ' + (err && err.message));
       }
     },
-    _speakCloud(text, kind) {
-      const generation = this._generation;
-      this._controller = new AbortController();
+    _speakCloud(text, kind, generation) {
+      const controller = new AbortController();
+      this._controller = controller;
       const isStale = () => generation !== this._generation;
       return fetch('/speak', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Fama-Token': window.__FAMA_TOKEN__ || '' },
         body: JSON.stringify({ text, kind, speed: this.rate }),
-        signal: this._controller.signal,
+        signal: controller.signal,
       })
         .then((resp) => {
           if (isStale()) throw new Error('stopped, discarding stale response');
@@ -177,20 +183,32 @@
                 return;
               }
               const url = URL.createObjectURL(blob);
+              if (this._audioUrl) URL.revokeObjectURL(this._audioUrl);
+              this._audioUrl = url;
               const audio = this._audioEl || new Audio();
               this._audioEl = audio;
               audio.src = url;
-              audio.onended = () => {
+              let finished = false;
+              const finish = (callback, value) => {
+                if (finished) return;
+                finished = true;
+                audio.onended = null;
+                audio.onerror = null;
+                if (this._audioUrl === url) this._audioUrl = null;
+                if (this._audioCancel === cancel) this._audioCancel = null;
                 URL.revokeObjectURL(url);
-                resolve();
+                callback(value);
               };
-              audio.onerror = () => {
-                URL.revokeObjectURL(url);
-                reject(new Error('audio playback failed'));
-              };
-              audio.play().catch(reject);
+              const cancel = () => finish(resolve);
+              this._audioCancel = cancel;
+              audio.onended = () => finish(resolve);
+              audio.onerror = () => finish(reject, new Error('audio playback failed'));
+              audio.play().catch((err) => finish(reject, err));
             })
-        );
+        )
+        .finally(() => {
+          if (this._controller === controller) this._controller = null;
+        });
     },
     _speakLocal(text) {
       if (!this.supported) {
@@ -218,6 +236,11 @@
       if (this._audioEl) {
         this._audioEl.pause();
         this._audioEl.removeAttribute('src'); // stops it from resuming/reloading the old blob on next play()
+      }
+      if (this._audioCancel) this._audioCancel();
+      if (this._audioUrl) {
+        URL.revokeObjectURL(this._audioUrl);
+        this._audioUrl = null;
       }
       this.onStateChange && this.onStateChange(false);
     },

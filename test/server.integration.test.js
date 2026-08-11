@@ -33,7 +33,7 @@ function request(urlPath, options = {}) {
       (res) => {
         let body = '';
         res.on('data', (chunk) => (body += chunk));
-        res.on('end', () => resolve({ status: res.statusCode, body }));
+        res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
       }
     );
     req.on('error', reject);
@@ -129,9 +129,9 @@ before(async () => {
     }),
   });
   await waitForServer(20);
-  const home = await request('/');
-  const match = home.body.match(/__FAMA_TOKEN__="([^"]+)"/);
-  assert.ok(match, 'served index.html should inject the auth token');
+  const auth = await request('/auth.js');
+  const match = auth.body.match(/__FAMA_TOKEN__="([^"]+)"/);
+  assert.ok(match, 'same-origin auth.js should provide the per-process token');
   authToken = match[1];
 });
 
@@ -142,6 +142,19 @@ after(() => {
 test('legitimate Host header: / returns 200', async () => {
   const res = await request('/', { headers: { Host: `127.0.0.1:${PORT}` } });
   assert.equal(res.status, 200);
+});
+
+test('responses include browser hardening headers and auth.js is never cached', async () => {
+  const home = await request('/');
+  assert.match(home.headers['content-security-policy'], /default-src 'self'/);
+  assert.match(home.headers['content-security-policy'], /object-src 'none'/);
+  assert.equal(home.headers['x-content-type-options'], 'nosniff');
+  assert.equal(home.headers['x-frame-options'], 'DENY');
+  assert.equal(home.headers['referrer-policy'], 'no-referrer');
+  assert.equal(home.headers['cache-control'], 'no-store');
+  assert.equal(home.body.includes('__FAMA_TOKEN__='), false, 'index HTML must remain static under CSP');
+  const auth = await request('/auth.js');
+  assert.equal(auth.headers['cache-control'], 'no-store');
 });
 
 test('spoofed Host header: every route returns 403, including /events', async () => {
@@ -220,6 +233,18 @@ test('/events tails Codex activity and preserves its session/project identity', 
 });
 
 test('static file serving rejects path traversal', async () => {
-  const res = await request('/../../../../etc/passwd');
-  assert.notEqual(res.status, 200);
+  for (const attempt of ['/../../../../etc/passwd', '/%2e%2e/%2e%2e/etc/passwd', '/..%5c..%5cWindows%5cwin.ini']) {
+    const res = await request(attempt);
+    assert.notEqual(res.status, 200, attempt);
+  }
+  const encoded = await request('/..%2f..%2f..%2fetc%2fpasswd');
+  assert.equal(encoded.status, 403);
+});
+
+test('static files support query strings and reject non-read methods', async () => {
+  const withQuery = await request('/index.html?cache-bust=1');
+  assert.equal(withQuery.status, 200);
+  const post = await request('/style.css', { method: 'POST' });
+  assert.equal(post.status, 405);
+  assert.equal(post.headers.allow, 'GET, HEAD');
 });

@@ -8,7 +8,7 @@ For anything more than a small fix, open an issue first to talk through the appr
 
 ## Running it locally
 
-No build step, no bundler, plain Node.
+No build step or bundler for the source server, just plain Node 18+. Desktop development and packaging currently require Node 22.12+ because of Electron's build toolchain.
 
 ```
 git clone https://github.com/mrktchris/fama.git
@@ -31,7 +31,7 @@ CLAUDE_NARRATOR_DIR=/path/to/some/.claude/projects/<encoded-folder> npm start
 
 ## Where things live
 
-- **`server.js`** — the whole backend: transcript watching, SSE, the optional OpenAI rewrite/TTS calls, settings persistence. Single file on purpose, it's not that big yet.
+- **`server.js`** — the backend composition root: transcript discovery/tailing, SSE, HTTP policy, optional OpenAI rewrite/TTS calls, and settings persistence. It is intentionally dependency-light but is now large enough that new work should deepen the existing modules instead of adding more policy inline.
 - **`lib/tail.js`** — byte-offset file tailing (`FileTailer`), reused by nothing else, kept separate because it's the one piece with real correctness subtlety (partial UTF-8 reads, `fs.readSync` return values).
 - **`lib/parse.js`** — turns a raw transcript JSON line into normalized events. This is the part most likely to need updates if Claude Code's own transcript format changes.
 - **`viewer/`** — the browser UI: `app.js` (lanes, SSE handling), `speech.js` (the `Narrator` class, both voice backends), `settings.js` (the gear-icon modal), `mascot.js`, `style.css`, `index.html`.
