@@ -1,7 +1,7 @@
 {
   "name": "fama",
-  "version": "0.12.3",
-  "description": "The house that hears everything and speaks it back, live, as your Claude Code agent works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
+  "version": "0.12.4",
+  "description": "Hear your Claude Code agent think, live, as it works. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
   "main": "desktop/main.js",
   "bin": {
     "fama": "server.js"

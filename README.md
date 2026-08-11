@@ -4,7 +4,7 @@
 
 **Hear your Claude Code agent think, out loud, live, as it works.**
 
-In Ovid, Fama lives in a house at the center of the world, built of resounding bronze — no doors, a thousand openings, every sound that enters is caught and sent back out, instantly, without rest. That's the mechanism this app borrows: it tails a live transcript and speaks it back to you as it happens. The myth's Fama mixes lies in with the truth; this one doesn't — it only repeats what's real, nothing invented, nothing sent anywhere it shouldn't be.
+Fama tails a live transcript and speaks it back to you as it happens — nothing invented, nothing sent anywhere it shouldn't be.
 
 A local, always-on window into what Claude Code is actually doing right now: what it's thinking, which tool it just ran, what came back. Local-first by design: it tails the session transcript files Claude Code already writes on your own machine, no required API calls, no cloud dependency to even open it. Optional cloud voice if you want it to sound less robotic, with a persona and accent you control.
 
