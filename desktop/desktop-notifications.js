@@ -61,7 +61,7 @@ class DesktopNotifications {
       return;
     }
     this._lastIdleNotificationAt = now;
-    const agent = activity.provider === 'codex' ? 'Codex' : 'Claude';
+    const agent = activity.provider === 'codex' ? 'Codex' : activity.provider === 'buzz' ? 'BUZZ' : 'Claude';
     this._deliver('Fama · Idle', `${agent}'s gone quiet after some activity.`);
   }
 }

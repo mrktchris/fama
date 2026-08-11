@@ -13,6 +13,7 @@ const KIND_META = {
   result: { icon: 'check', cls: 'k-result', title: 'Result' },
   error: { icon: 'error', cls: 'k-error', title: 'Error' },
   image: { icon: 'image', cls: 'k-image', title: 'Image' },
+  agent_heartbeat: { icon: 'activity', cls: 'k-system', title: 'Agent heartbeat' },
   system: { icon: 'activity', cls: 'k-system', title: 'Activity' },
 };
 
@@ -388,6 +389,7 @@ function markCurrentLane() {
 function eventAuthor(evt, meta) {
   if (evt.kind === 'prompt') return 'You';
   if (evt.kind === 'text') return evt.provider === 'codex' ? 'Codex' : 'Claude';
+  if (evt.kind === 'agent_heartbeat') return evt.label || 'BUZZ agent';
   if (evt.kind === 'tool' && evt.label) return evt.label;
   return meta.title;
 }
@@ -441,7 +443,7 @@ function addRow(lane, evt) {
   }
 
   if (!lane.providerEl.textContent && evt.provider) {
-    lane.providerEl.textContent = evt.provider === 'codex' ? 'Codex' : 'Claude';
+    lane.providerEl.textContent = evt.provider === 'codex' ? 'Codex' : evt.provider === 'buzz' ? 'BUZZ' : 'Claude';
     lane.providerEl.dataset.provider = evt.provider;
   }
 
