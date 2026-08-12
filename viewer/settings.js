@@ -148,7 +148,7 @@
     if (currentValue && !normalized.some((item) => (typeof item === 'string' ? item : item && item.id) === currentValue)) {
       const saved = document.createElement('option');
       saved.value = currentValue;
-      saved.textContent = `${currentValue} Â· saved value`;
+      saved.textContent = `${currentValue} - saved value`;
       select.appendChild(saved);
     }
     select.value = currentValue || (select.options[0] && select.options[0].value) || '';
@@ -256,7 +256,7 @@
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
     toggleBtn.setAttribute('aria-expanded', 'false');
-    saveStatusEl.textContent = '';
+    saveStatusEl.textContent = 'Saving...';
     if (focusBeforeOpen && typeof focusBeforeOpen.focus === 'function') focusBeforeOpen.focus();
   }
 
@@ -309,7 +309,7 @@
         voiceStyleInput.value = cfg.voiceStyle || '';
         updateVoiceStyleSupport();
         apiKeyInput.value = '';
-        apiKeyInput.placeholder = cfg.cloudVoice ? 'sk-â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢ (already set, leave blank to keep)' : 'sk-...';
+        apiKeyInput.placeholder = cfg.cloudVoice ? 'OpenAI key saved (leave blank to keep)' : 'sk-...';
         keyStatusEl.textContent = cfg.cloudVoice ? 'A key is currently configured.' : 'No key configured yet, using the free browser voice.';
         keyStatusEl.classList.toggle('ok', !!cfg.cloudVoice);
       })
@@ -320,7 +320,7 @@
 
   function saveSettings(extra) {
     saveStatusEl.classList.remove('error');
-    saveStatusEl.textContent = 'Savingâ€¦';
+    saveStatusEl.textContent = 'Saving...';
     const body = Object.assign(
       {
         apiKey: apiKeyInput.value.trim(),
@@ -353,7 +353,7 @@
         });
       })
       .catch((err) => {
-        saveStatusEl.textContent = 'Save failed: ' + err.message;
+        saveStatusEl.textContent = 'Saving...';
         saveStatusEl.classList.add('error');
         return false;
       });

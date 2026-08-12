@@ -204,7 +204,7 @@ const server = http.createServer((req, res) => {
     // Windows an absolute path always contains the OS username). Sends only
     // friendly project names now, never a path. An array since one server can
     // now watch several projects at once, see resolveWatchProjects above.
-    const detail = watchProjects.length === 1 ? 'Live' : `Live Â· ${watchProjects.length} projects`;
+    const detail = watchProjects.length === 1 ? 'Live' : `Live - ${watchProjects.length} projects`;
     res.write(
       `data: ${JSON.stringify({
         kind: 'system',
