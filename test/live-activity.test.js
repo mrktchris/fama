@@ -18,7 +18,7 @@ test('SseEventFeed bounds replay and publishes to current subscribers', () => {
   feed.publish({ n: 4 });
 
   const replay = [];
-  feed.replay({ write: (payload) => replay.push(JSON.parse(payload.slice(6))) });
+  feed.replay({ write: (payload) => replay.push(JSON.parse(payload.split('\n').find((line) => line.startsWith('data: ')).slice(6))) });
   assert.equal(live.length, 3);
   assert.deepEqual(replay, [{ n: 3 }, { n: 4 }]);
   assert.equal(feed.snapshot().clients, 0);

@@ -213,7 +213,7 @@ const server = http.createServer((req, res) => {
         projects: watchProjects.map((p) => ({ id: p.id, name: p.name })),
       })}\n\n`
     );
-    const unsubscribe = liveActivity.subscribe(res);
+    const unsubscribe = liveActivity.subscribe(res, { lastEventId: req.headers['last-event-id'] || null });
     req.on('close', unsubscribe);
     return;
   }

@@ -84,10 +84,11 @@ function waitForSseEvent(predicate, trigger) {
           while ((idx = buffer.indexOf('\n\n')) !== -1) {
             const frame = buffer.slice(0, idx);
             buffer = buffer.slice(idx + 2);
-            if (!frame.startsWith('data: ')) continue;
+            const dataLine = frame.split('\n').find((line) => line.startsWith('data: '));
+            if (!dataLine) continue;
             let event;
             try {
-              event = JSON.parse(frame.slice(6));
+              event = JSON.parse(dataLine.slice(6));
             } catch {
               continue;
             }

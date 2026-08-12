@@ -4,6 +4,8 @@ const lanesEl = document.getElementById('lanes');
 const statusEl = document.getElementById('status');
 const emptyHintEl = document.getElementById('empty-hint');
 const lanes = new Map(); // sessionId -> lane record
+const seenEventIds = new Set();
+const MAX_SEEN_EVENT_IDS = 500;
 
 const KIND_META = {
   prompt: { icon: 'user', cls: 'k-prompt', title: 'You' },
@@ -443,7 +445,7 @@ function appendEventDetail(detail, evt) {
 
 function addRow(lane, evt) {
   if (!lane.titled && evt.kind === 'prompt' && evt.detail) {
-    lane.titleEl.textContent = evt.detail.slice(0, 70);
+    lane.titleEl.textContent = evt.detail.replace(/\s+/g, ' ').trim().slice(0, 70);
     lane.titled = true;
   }
 
@@ -498,9 +500,10 @@ function addRow(lane, evt) {
     row.append(avatar, content);
   }
 
+  const wasNearBottom = lane.feedEl.scrollHeight - lane.feedEl.scrollTop - lane.feedEl.clientHeight < 48;
   lane.feedEl.appendChild(row);
   while (lane.feedEl.children.length > 200) lane.feedEl.removeChild(lane.feedEl.firstChild);
-  lane.feedEl.scrollTop = lane.feedEl.scrollHeight;
+  if (wasNearBottom) lane.feedEl.scrollTop = lane.feedEl.scrollHeight;
   lane.lastTs = Date.now();
   lane.el.classList.remove('idle');
 }
@@ -554,6 +557,11 @@ source.onmessage = (e) => {
     evt = JSON.parse(e.data);
   } catch (err) {
     return;
+  }
+  if (e.lastEventId) {
+    if (seenEventIds.has(e.lastEventId)) return;
+    seenEventIds.add(e.lastEventId);
+    if (seenEventIds.size > MAX_SEEN_EVENT_IDS) seenEventIds.delete(seenEventIds.values().next().value);
   }
   if (evt.kind === 'system') {
     statusEl.textContent = evt.detail;

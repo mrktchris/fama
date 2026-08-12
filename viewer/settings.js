@@ -15,7 +15,11 @@
   function applyAccent(hex) {
     const selected = Array.from(swatches).find((s) => s.dataset.accent === hex) || swatches[0];
     document.documentElement.dataset.accent = selected ? selected.dataset.theme : 'aurora';
-    swatches.forEach((s) => s.classList.toggle('active', s.dataset.accent === hex));
+    swatches.forEach((s) => {
+      const active = s.dataset.accent === hex;
+      s.classList.toggle('active', active);
+      s.setAttribute('aria-pressed', String(active));
+    });
   }
   swatches.forEach((swatch) => {
     swatch.addEventListener('click', () => {
