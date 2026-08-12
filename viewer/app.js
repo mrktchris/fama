@@ -54,6 +54,11 @@ const voiceSelectEl = document.getElementById('voice-select');
 const voiceRateEl = document.getElementById('voice-rate');
 const voiceRateReadoutEl = document.getElementById('voice-rate-readout');
 const viewButtons = [...document.querySelectorAll('.view-option')];
+const newActivityEl = document.getElementById('new-activity');
+newActivityEl.addEventListener('click', () => {
+  for (const lane of lanes.values()) lane.feedEl.scrollTop = lane.feedEl.scrollHeight;
+  newActivityEl.classList.add('hidden');
+});
 
 // --- client-side prefs that persist across reloads, no server round trip ---
 const PREFS_KEY = 'fama.prefs';
@@ -257,6 +262,9 @@ function laneFor(sessionId) {
 
   const titleEl = document.createElement('span');
   titleEl.className = 'lane-title';
+  titleEl.setAttribute('role', 'button');
+  titleEl.setAttribute('tabindex', '0');
+  titleEl.setAttribute('aria-label', 'Rename session');
   titleEl.title = 'Double-click to rename · session ' + key;
   const savedNames = loadSessionNames();
   const customName = savedNames[key];
@@ -285,6 +293,12 @@ function laneFor(sessionId) {
     }
   }
   titleEl.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    startRename();
+  });
+  titleEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
     e.stopPropagation();
     startRename();
   });
@@ -317,6 +331,7 @@ function laneFor(sessionId) {
     pinnedSessionId = pinnedSessionId === key ? null : key;
     markCurrentLane();
   });
+  pinBtn.addEventListener('keydown', (e) => e.stopPropagation());
 
   const collapseIcon = makeIcon('chevron', 'lane-chevron');
   header.append(dragHandle, projectEl, titleEl, renameInput, providerEl, badgeEl, pinBtn, collapseIcon);
@@ -361,6 +376,7 @@ function laneFor(sessionId) {
     projectEl,
     providerEl,
     lastTs: Date.now(),
+    newActivity: 0,
     titled: !!customName,
   };
   lanes.set(key, lane);
@@ -504,6 +520,7 @@ function addRow(lane, evt) {
   lane.feedEl.appendChild(row);
   while (lane.feedEl.children.length > 200) lane.feedEl.removeChild(lane.feedEl.firstChild);
   if (wasNearBottom) lane.feedEl.scrollTop = lane.feedEl.scrollHeight;
+  else newActivityEl.classList.remove('hidden');
   lane.lastTs = Date.now();
   lane.el.classList.remove('idle');
 }

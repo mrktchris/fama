@@ -591,6 +591,7 @@ body.view-conversation .k-text .row-detail { font-size: calc(var(--feed-font-siz
 }
 
 .k-prompt .row-label { color: var(--accent); font-weight: 600; }
+.new-activity { position: fixed; right: 24px; bottom: 22px; z-index: 20; border: 1px solid var(--accent); border-radius: 999px; padding: 9px 15px; background: var(--panel-2); color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
 
 /* Activity view keeps the same complete event DOM, but compresses it into an
    operator-friendly stream instead of maintaining a second render path. */
