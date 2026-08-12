@@ -518,7 +518,8 @@ function addRow(lane, evt) {
 
   const wasNearBottom = lane.feedEl.scrollHeight - lane.feedEl.scrollTop - lane.feedEl.clientHeight < 48;
   lane.feedEl.appendChild(row);
-  while (lane.feedEl.children.length > 200) lane.feedEl.removeChild(lane.feedEl.firstChild);
+  // Bound live DOM size to reduce layout/paint work during long sessions.
+  while (lane.feedEl.children.length > 120) lane.feedEl.removeChild(lane.feedEl.firstChild);
   if (wasNearBottom) lane.feedEl.scrollTop = lane.feedEl.scrollHeight;
   else newActivityEl.classList.remove('hidden');
   lane.lastTs = Date.now();

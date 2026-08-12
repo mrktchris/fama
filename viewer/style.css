@@ -501,6 +501,8 @@ body.view-activity main#lanes { grid-template-columns: repeat(auto-fit, minmax(m
 .lane-feed {
   max-height: clamp(380px, calc(100vh - 168px), 820px);
   overflow-y: auto;
+  contain: content;
+  overscroll-behavior: contain;
   padding: 18px 16px 24px;
   display: flex;
   flex-direction: column;
@@ -677,7 +679,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 34px 100px rgba(0, 0, 0, 0.55), inset 0 1px rgba(255, 255, 255, 0.035);
-  padding: 20px 22px 24px;
+  padding: 16px 18px 18px;
 }
 .settings-modal::-webkit-scrollbar { width: 7px; }
 .settings-modal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
@@ -700,7 +702,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 }
 #settings-close:hover { color: var(--text); }
 
-.settings-section { padding: 14px 0; border-top: 1px solid var(--border-soft); }
+.settings-section { padding: 10px 0; border-top: 1px solid var(--border-soft); }
 .settings-section:first-of-type { border-top: none; }
 .settings-section h3 {
   font-size: 11px;
