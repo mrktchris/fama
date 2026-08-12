@@ -23,6 +23,13 @@ test('landing page is deployed by an explicit Pages workflow', () => {
   assert.match(workflow, /path: docs/);
 });
 
+test('release workflow validates macOS before publishing a cross-platform release', () => {
+  const workflow = read('.github/workflows/release.yml');
+  assert.match(workflow, /macos-release-preflight:/);
+  assert.match(workflow, /windows-release:\s+    runs-on: windows-latest\s+    needs: macos-release-preflight/);
+  assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY: "false"/);
+});
+
 test('public release checklist covers platform parity and download verification', () => {
   const checklist = read('docs/LAUNCH-CHECKLIST.md');
   assert.match(checklist, /every\s+platform advertised in README has a matching downloadable asset/);

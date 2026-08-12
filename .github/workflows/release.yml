@@ -15,8 +15,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  macos-release-preflight:
+    # Do this before the Windows job publishes a release. A package failure on
+    # macOS must not turn a Windows-only bundle into the project's latest
+    # release when the public product promise includes both platforms.
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --audit-level=high
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          expected="v$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_REF_NAME" != "$expected" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $expected" >&2
+            exit 1
+          fi
+      - name: Build and scan unsigned universal macOS package
+        run: npm run dist:mac
+        env:
+          # On hosted runners an empty signing configuration may be interpreted
+          # as a path and fail with "not a file". A supplied CSC_LINK still
+          # selects the explicit certificate in the final release job.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - run: node desktop/verify-package.js dist-desktop/mac-universal
+
   windows-release:
     runs-on: windows-latest
+    needs: macos-release-preflight
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,6 +181,7 @@ jobs:
           # unsigned build and the release notes state that limitation.
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Block secrets and forbidden files in macOS payload
         run: node desktop/verify-package.js dist-desktop/mac-universal
