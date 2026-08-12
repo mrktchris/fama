@@ -344,6 +344,7 @@ function laneFor(sessionId) {
   function toggleCollapsed() {
     const collapsed = el.classList.toggle('collapsed');
     header.setAttribute('aria-expanded', String(!collapsed));
+    if (!collapsed) lane.newActivity = 0;
   }
   header.addEventListener('click', toggleCollapsed);
   header.addEventListener('keydown', (event) => {
@@ -518,8 +519,12 @@ function addRow(lane, evt) {
 
   const wasNearBottom = lane.feedEl.scrollHeight - lane.feedEl.scrollTop - lane.feedEl.clientHeight < 48;
   lane.feedEl.appendChild(row);
-  // Bound live DOM size to reduce layout/paint work during long sessions.
-  while (lane.feedEl.children.length > 120) lane.feedEl.removeChild(lane.feedEl.firstChild);
+  // Keep every thread live, but retain less history in lanes the user has
+  // collapsed. This makes 6+ concurrent sessions cheap without dropping the
+  // newest activity from any lane.
+  const rowLimit = lane.el.classList.contains('collapsed') ? 32 : 120;
+  while (lane.feedEl.children.length > rowLimit) lane.feedEl.removeChild(lane.feedEl.firstChild);
+  if (lane.el.classList.contains('collapsed')) lane.newActivity = (lane.newActivity || 0) + 1;
   if (wasNearBottom) lane.feedEl.scrollTop = lane.feedEl.scrollHeight;
   else newActivityEl.classList.remove('hidden');
   lane.lastTs = Date.now();

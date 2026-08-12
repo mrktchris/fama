@@ -502,6 +502,8 @@ body.view-activity main#lanes { grid-template-columns: repeat(auto-fit, minmax(m
   max-height: clamp(380px, calc(100vh - 168px), 820px);
   overflow-y: auto;
   contain: content;
+  content-visibility: auto;
+  contain-intrinsic-size: 420px;
   overscroll-behavior: contain;
   padding: 18px 16px 24px;
   display: flex;
