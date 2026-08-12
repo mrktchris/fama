@@ -1,6 +1,6 @@
 # Fama v1.1.0 — Windows and macOS parity
 
-Pending release.
+Released 2026-08-12.
 
 Fama now ships from one shared Electron codebase as a Windows x64 app and a universal macOS app for Apple Silicon and Intel.
 

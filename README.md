@@ -7,9 +7,9 @@
 [![Platforms: Windows + macOS](https://img.shields.io/badge/platforms-Windows%20%2B%20macOS-0078D4)](https://github.com/mrktchris/fama/releases/latest)
 [![Build provenance: Sigstore](https://img.shields.io/badge/provenance-Sigstore-3c8dbc)](https://github.com/mrktchris/fama/attestations)
 
-**See and hear Claude Code, Codex, and opt-in agent heartbeats work, live.**
+**Fama is the calm, local desktop companion for Claude Code and Codex.**
 
-Fama is a local-first Windows and macOS desktop companion for coding agents. It turns the transcript files already on your computer into an always-visible conversation and activity dashboard, with optional spoken narration.
+Fama turns the transcript files already on your computer into an always-visible Messages and Activity dashboard, with optional spoken narration. One shared Electron app now builds for Windows x64 and universal macOS (Apple Silicon + Intel).
 
 ![Fama showing live Claude Code and Codex conversations](docs/screenshot-dashboard.png)
 
