@@ -8,10 +8,11 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('public landing page uses stable release assets and valid UTF-8 text', () => {
+test('public landing page names the current supported release and avoids unavailable downloads', () => {
   const landing = read('docs/index.html');
-  assert.match(landing, /releases\/latest\/download\/Fama-Setup\.exe/);
-  assert.match(landing, /releases\/latest\/download\/Fama-macOS-universal\.dmg/);
+  assert.match(landing, /releases\/download\/v1\.1\.0\/Fama-Setup\.exe/);
+  assert.match(landing, /Latest release: Fama 1\.1\.0 for Windows x64/);
+  assert.doesNotMatch(landing, /download\/Fama-macOS-universal\.dmg/);
   assert.doesNotMatch(landing, /\uFFFD/);
 });
 
