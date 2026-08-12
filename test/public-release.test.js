@@ -1,0 +1,30 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.join(__dirname, '..');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+
+test('public landing page uses stable release assets and valid UTF-8 text', () => {
+  const landing = read('docs/index.html');
+  assert.match(landing, /releases\/latest\/download\/Fama-Setup\.exe/);
+  assert.match(landing, /releases\/latest\/download\/Fama-macOS-universal\.dmg/);
+  assert.doesNotMatch(landing, /\uFFFD/);
+});
+
+test('landing page is deployed by an explicit Pages workflow', () => {
+  const workflow = read('.github/workflows/pages.yml');
+  assert.match(workflow, /actions\/upload-pages-artifact@/);
+  assert.match(workflow, /actions\/deploy-pages@/);
+  assert.match(workflow, /path: docs/);
+});
+
+test('public release checklist covers platform parity and download verification', () => {
+  const checklist = read('docs/LAUNCH-CHECKLIST.md');
+  assert.match(checklist, /every\s+platform advertised in README has a matching downloadable asset/);
+  assert.match(checklist, /SHA256SUMS\.txt/);
+  assert.match(checklist, /10&ndash;20 beta users/);
+});
