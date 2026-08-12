@@ -1,3 +1,20 @@
+# Fama v1.1.2 — reliable cross-platform release
+
+Released 2026-08-12.
+
+## Fixed
+
+- The release gate now validates the universal macOS package before publishing
+  the Windows release, preventing a partial latest release when Mac packaging
+  fails.
+- macOS builds explicitly disable automatic identity discovery when no signing
+  certificate is configured, avoiding the hosted-runner path error that blocked
+  the prior Mac package.
+- The version in `package.json`, `package-lock.json`, and the release tag is
+  now kept in lockstep by the release workflow's existing tag gate.
+
+---
+
 # Fama v1.1.0 — Windows and macOS parity
 
 Released 2026-08-12.
