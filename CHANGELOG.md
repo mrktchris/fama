@@ -1,4 +1,4 @@
-# Fama v1.1.2 — reliable cross-platform release
+# Fama v1.1.3 — reliable cross-platform release
 
 Released 2026-08-12.
 
@@ -10,6 +10,9 @@ Released 2026-08-12.
 - macOS builds explicitly disable automatic identity discovery when no signing
   certificate is configured, avoiding the hosted-runner path error that blocked
   the prior Mac package.
+- The final macOS release job now exports code-signing variables only when a
+  real certificate is configured, so unsigned builds no longer treat an empty
+  value as a certificate path.
 - The version in `package.json`, `package-lock.json`, and the release tag is
   now kept in lockstep by the release workflow's existing tag gate.
 

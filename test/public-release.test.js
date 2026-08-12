@@ -28,6 +28,8 @@ test('release workflow validates macOS before publishing a cross-platform releas
   assert.match(workflow, /macos-release-preflight:/);
   assert.match(workflow, /windows-release:\s+    runs-on: windows-latest\s+    needs: macos-release-preflight/);
   assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY: "false"/);
+  assert.match(workflow, /MAC_CSC_LINK: \$\{\{ secrets\.MAC_CSC_LINK \}\}/);
+  assert.match(workflow, /if \[\[ -n "\$MAC_CSC_LINK" \]\]; then/);
 });
 
 test('public release checklist covers platform parity and download verification', () => {
