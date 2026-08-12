@@ -1,4 +1,4 @@
-# Fama v1.1.2 — reliable cross-platform release
+# Fama v1.1.4 — reliable cross-platform release
 
 Released 2026-08-12.
 

@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fama - a live local dashboard and voice for Claude Code and Codex</title>
-<meta name="description" content="Fama is the calm, local Windows and macOS desktop companion for Claude Code and Codex, with optional voice.">
+<meta name="description" content="See and hear Claude Code and Codex work live. Fama is a free, local-first Windows and macOS desktop dashboard with optional voice.">
 <meta name="theme-color" content="#080b12">
 <link rel="canonical" href="https://mrktchris.github.io/fama/">
 <meta property="og:title" content="Fama - see and hear your coding agents work live">
-<meta property="og:description" content="A calm, local Windows and macOS desktop companion for Claude Code and Codex, with optional voice.">
+<meta property="og:description" content="A free, local-first Windows and macOS desktop dashboard for Claude Code and Codex, with optional voice.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://mrktchris.github.io/fama/">
 <meta property="og:image" content="https://mrktchris.github.io/fama/screenshot-dashboard.png">
@@ -70,6 +70,7 @@
     border: 1px solid var(--border); background: rgba(17, 24, 39, .75); color: var(--muted); font-size: 13px;
   }
   .release-note strong { color: var(--text); }
+  .install-note { max-width: 620px; margin: 12px auto 0; color: var(--muted-2); font-size: 12px; }
 
   section { padding: 60px 0; border-bottom: 1px solid var(--border-soft); }
   section:last-of-type { border-bottom: none; }
@@ -126,7 +127,7 @@
     </div>
     <div class="kicker">Free &middot; open source &middot; local-first</div>
     <h1>Fama</h1>
-    <p class="tagline">A calm local dashboard for Claude Code and Codex. See the work, switch between Messages and Activity, and hear it when you want.</p>
+    <p class="tagline">See and hear Claude Code and Codex work live. Fama gives you one calm, local view of every active coding session.</p>
     <div class="privacy-badge">Local by default · no telemetry · optional cloud voice uses your own key</div>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/mrktchris/fama/releases/download/v1.1.4/Fama-Setup.exe">Download Fama 1.1.4 for Windows</a>
@@ -135,6 +136,7 @@
       <a class="btn btn-secondary" href="https://github.com/mrktchris/fama">View on GitHub</a>
     </div>
     <div class="release-note"><strong>Latest release: Fama 1.1.4 for Windows x64 and universal macOS.</strong> One shared app for Apple Silicon and Intel Macs.</div>
+    <p class="install-note">Windows and macOS builds are currently unsigned, so SmartScreen or Gatekeeper may warn on first launch. Verify the included checksum and build provenance before opening.</p>
     <div class="meta-line">MIT licensed &middot; no account, no telemetry, no required API key &middot; SHA-256 checksums and signed build provenance included</div>
   </div>
 </header>
@@ -146,6 +148,27 @@
     <p class="shot-caption">Messages stays readable at a glance; Activity keeps tool calls and results one click away.</p>
     <img class="shot" src="screenshot-settings.png" alt="Fama settings for local and optional cloud voice, narration, and appearance">
     <p class="shot-caption">Voice, persona, and accent, all configurable, with a live cost estimate as you adjust.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Before you install</h2>
+    <div class="feature-grid">
+      <div class="feature">
+        <h3>Free, with no account</h3>
+        <p>Fama is open source and free to use. You do not need an account or API key for the local dashboard or your operating system's built-in voice.</p>
+      </div>
+      <div class="feature">
+        <h3>Your transcripts stay local</h3>
+        <p>Fama reads transcript files already on your device. Only optional cloud voice sends the current narrated line, and optionally its source text, to OpenAI using your own key.</p>
+      </div>
+      <div class="feature">
+        <h3>Verify the download</h3>
+        <p>Each release includes SHA-256 checksums, an SBOM, and GitHub/Sigstore-signed provenance. The release page explains how to verify them.</p>
+      </div>
+    </div>
+    <p class="section-sub" style="margin-top:24px">Need help or found a compatibility issue? <a href="https://github.com/mrktchris/fama/issues/new/choose">Open an issue on GitHub</a>. Please use the private security-reporting flow for security concerns.</p>
   </div>
 </section>
 
@@ -220,7 +243,7 @@
 
 <footer>
   <div class="wrap">
-    MIT licensed. <a href="https://github.com/mrktchris/fama">github.com/mrktchris/fama</a>
+    MIT licensed. <a href="https://github.com/mrktchris/fama">github.com/mrktchris/fama</a> · <a href="https://github.com/mrktchris/fama/issues/new/choose">Support &amp; feedback</a>
   </div>
 </footer>
 

@@ -109,9 +109,14 @@ Maintainers can use the [public-launch checklist](docs/LAUNCH-CHECKLIST.md) to
 verify that the landing page, advertised platforms, downloadable release assets,
 and Product Hunt materials are aligned before an announcement.
 
+The matching [Product Hunt launch kit](docs/PRODUCT-HUNT-LAUNCH-KIT.md) has the
+current positioning, gallery plan, first-maker-comment draft, and a launch-day
+reply guide. Keep it factual: Fama is free and usable now, but its Windows and
+macOS packages are currently unsigned.
+
 ## Contributing
 
-Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); run `npm test` before opening a PR. Security reports belong in GitHub's private **Security → Report a vulnerability** flow, not a public issue.
+Need help, found a bug, or want to share compatibility feedback? [Open a GitHub issue](https://github.com/mrktchris/fama/issues/new/choose). Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); run `npm test` before opening a PR. Security reports belong in GitHub's private **Security → Report a vulnerability** flow, not a public issue.
 
 ## License
 
