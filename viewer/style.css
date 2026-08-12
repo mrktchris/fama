@@ -847,3 +847,14 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
   .row-content { max-width: calc(100% - 38px); }
   .lane-project, .lane-provider { display: inline-flex; max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Small desktop windows and split-screen layouts need the same single-lane
+   fallback as phones. Without this, a 520px auto-fit track plus gutters can
+   leave the first lane outside the viewport on a ~760px window. */
+@media (max-width: 900px) {
+  main#lanes,
+  body.view-activity main#lanes { grid-template-columns: minmax(0, 1fr); }
+  main#lanes { padding-inline: 12px; gap: 12px; }
+  .lane { min-width: 0; width: 100%; }
+  .lane-feed { max-height: calc(100vh - 170px); }
+}
