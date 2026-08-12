@@ -3,6 +3,7 @@
 const listEl = document.getElementById('list');
 const browseBtn = document.getElementById('browse');
 const continueBtn = document.getElementById('continue');
+const clearBtn = document.getElementById('clear-projects');
 
 // encoded -> { encoded, path, lastActive } for everything currently shown,
 // checked state lives on the checkbox itself, this map is just for lookups
@@ -105,4 +106,11 @@ continueBtn.addEventListener('click', () => {
       return project ? { encoded, path: project.path } : { encoded };
     })
   );
+});
+
+clearBtn.addEventListener('click', async () => {
+  if (!checkedEncoded.size || !confirm('Stop watching all projects and clear the saved selection?')) return;
+  clearBtn.disabled = true;
+  clearBtn.textContent = 'Clearing...';
+  await window.famaSetup.confirmProjects({ clear: true });
 });

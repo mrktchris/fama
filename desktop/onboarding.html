@@ -41,6 +41,8 @@
   #browse:hover { border-color: var(--muted-2); transform: translateY(-1px); }
   #continue { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
   #continue:disabled { background: var(--panel); color: var(--muted-2); border-color: var(--border); cursor: default; font-weight: 400; }
+  #clear-projects { background: transparent; color: var(--muted); border-color: var(--border); }
+  #clear-projects:hover { color: var(--error, #ff7794); border-color: var(--error, #ff7794); }
 </style>
 </head>
 <body>
@@ -50,6 +52,7 @@
   <div id="list"><div id="empty">Looking…</div></div>
   <button id="browse" type="button">Browse for a different folder…</button>
   <button id="continue" type="button" disabled>Continue</button>
+  <button id="clear-projects" type="button">Clear all watched projects</button>
   <script src="onboarding.js"></script>
 </body>
 </html>

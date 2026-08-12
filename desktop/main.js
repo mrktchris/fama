@@ -459,6 +459,16 @@ ipcMain.handle('get-current-projects', (event) => {
 });
 ipcMain.handle('confirm-projects', async (event, selection) => {
   assertIpcSender(event, onboardingWindow);
+  if (selection && selection.clear === true) {
+    runtimeConfig.clearSelectedProjects();
+    await localServer.stop();
+    if (onboardingWindow) {
+      onboardingWindow.close();
+      onboardingWindow = null;
+    }
+    if (mainWindow) mainWindow.hide();
+    return true;
+  }
   const projects = selectedProjectsFromSelection(selection, { projectDirFromEncoded, realCwdFor, encodeProjectDir });
   if (!projects.length) return false; // nothing selected, caller should keep the window open
   runtimeConfig.setSelectedProjects(projects);

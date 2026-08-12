@@ -83,6 +83,15 @@ class RuntimeConfigStore {
     this.save(config);
     return config.selectedProjects;
   }
+
+  clearSelectedProjects() {
+    const config = this.load();
+    delete config.selectedProjects;
+    delete config.watchDirEncoded;
+    delete config.watchDirsEncoded;
+    this.save(config);
+    return true;
+  }
 }
 
 module.exports = { DEFAULT_PREFS, RuntimeConfigStore, SETTABLE_PREF_KEYS };
