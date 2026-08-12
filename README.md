@@ -103,6 +103,12 @@ Installed Windows and macOS builds check GitHub Releases on launch. When an upda
 - Subagent transcripts are not displayed as nested lanes yet.
 - Two unrelated tasks writing into the same agent project folder can appear in the same project feed; watch separate projects for strict visual separation.
 
+## Public launch
+
+Maintainers can use the [public-launch checklist](docs/LAUNCH-CHECKLIST.md) to
+verify that the landing page, advertised platforms, downloadable release assets,
+and Product Hunt materials are aligned before an announcement.
+
 ## Contributing
 
 Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); run `npm test` before opening a PR. Security reports belong in GitHub's private **Security → Report a vulnerability** flow, not a public issue.
