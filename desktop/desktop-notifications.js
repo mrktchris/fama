@@ -1,8 +1,9 @@
 'use strict';
 
-const DEFAULT_IDLE_MS = 90000;
-const DEFAULT_MIN_EVENTS = 8;
-const DEFAULT_COOLDOWN_MS = 120000;
+const DEFAULT_IDLE_MS = 180000;
+const DEFAULT_MIN_EVENTS = 10;
+const DEFAULT_COOLDOWN_MS = 300000;
+const DEFAULT_ERROR_COOLDOWN_MS = 60000;
 
 class DesktopNotifications {
   constructor(options) {
@@ -16,13 +17,21 @@ class DesktopNotifications {
     this._idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
     this._minEvents = options.minEvents ?? DEFAULT_MIN_EVENTS;
     this._cooldownMs = options.cooldownMs ?? DEFAULT_COOLDOWN_MS;
+    this._errorCooldownMs = options.errorCooldownMs ?? DEFAULT_ERROR_COOLDOWN_MS;
     this._sessions = new Map();
     this._lastIdleNotificationAt = null;
+    this._lastErrors = new Map();
   }
 
   handle(event) {
     if (!event || typeof event !== 'object' || event.kind === 'system') return;
     if (event.kind === 'error') {
+      const detail = String(event.detail || event.label || 'Something went wrong in a session.').replace(/\s+/g, ' ').trim();
+      const key = `${event.sessionId || 'global'}:${detail}`;
+      const now = this._now();
+      const last = this._lastErrors.get(key);
+      if (last !== undefined && now - last < this._errorCooldownMs) return;
+      this._lastErrors.set(key, now);
       this._deliver('Fama · Error', event.detail || event.label || 'Something went wrong in a session.');
       return;
     }
@@ -45,6 +54,7 @@ class DesktopNotifications {
       if (activity.timer !== null) this._clearTimer(activity.timer);
     }
     this._sessions.clear();
+    this._lastErrors.clear();
   }
 
   _settle(sessionId, activity) {
@@ -70,5 +80,6 @@ module.exports = {
   DEFAULT_COOLDOWN_MS,
   DEFAULT_IDLE_MS,
   DEFAULT_MIN_EVENTS,
+  DEFAULT_ERROR_COOLDOWN_MS,
   DesktopNotifications,
 };

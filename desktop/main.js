@@ -303,7 +303,7 @@ function notify(title, body) {
     title,
     body: body && body.length > 180 ? body.slice(0, 177) + '…' : body,
     icon: path.join(__dirname, 'icon.png'),
-    silent: false,
+    silent: true,
   });
   n.on('click', () => {
     if (mainWindow) {
