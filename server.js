@@ -46,7 +46,7 @@ const { selectedProjectsFromEnvironment } = require('./lib/selected-projects');
 // read the token out of index.html like any other same-origin page. The
 // Host-header allowlist below (see ALLOWED_HOSTS) is what actually closes
 // that gap, by rejecting anything that didn't arrive addressed to the real
-// loopback name — found by a later, deeper security audit, this token was
+// loopback name Ã¢â‚¬â€ found by a later, deeper security audit, this token was
 // never sufficient on its own.
 const AUTH_TOKEN = crypto.randomBytes(24).toString('hex');
 function requireAuth(req, res) {
@@ -204,7 +204,7 @@ const server = http.createServer((req, res) => {
     // Windows an absolute path always contains the OS username). Sends only
     // friendly project names now, never a path. An array since one server can
     // now watch several projects at once, see resolveWatchProjects above.
-    const detail = watchProjects.length === 1 ? 'Live' : `Live · ${watchProjects.length} projects`;
+    const detail = watchProjects.length === 1 ? 'Live' : `Live Â· ${watchProjects.length} projects`;
     res.write(
       `data: ${JSON.stringify({
         kind: 'system',

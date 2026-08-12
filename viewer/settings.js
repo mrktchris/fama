@@ -118,8 +118,8 @@
   }
 
   // Project selector button, header: same Electron-gated pattern as above.
-  // Was tray-only ("Manage watched projects…"), which is easy to never find
-  // on your own — this surfaces the same flow directly in the app.
+  // Was tray-only ("Manage watched projectsâ€¦"), which is easy to never find
+  // on your own Ã¢â‚¬â€ this surfaces the same flow directly in the app.
   const manageProjectsBtn = document.getElementById('manage-projects');
   if (window.famaDesktop && window.famaDesktop.manageProjects) {
     manageProjectsBtn.classList.remove('hidden');
@@ -148,7 +148,7 @@
     if (currentValue && !normalized.some((item) => (typeof item === 'string' ? item : item && item.id) === currentValue)) {
       const saved = document.createElement('option');
       saved.value = currentValue;
-      saved.textContent = `${currentValue} · saved value`;
+      saved.textContent = `${currentValue} Â· saved value`;
       select.appendChild(saved);
     }
     select.value = currentValue || (select.options[0] && select.options[0].value) || '';
@@ -309,7 +309,7 @@
         voiceStyleInput.value = cfg.voiceStyle || '';
         updateVoiceStyleSupport();
         apiKeyInput.value = '';
-        apiKeyInput.placeholder = cfg.cloudVoice ? 'sk-•••••••••••• (already set, leave blank to keep)' : 'sk-...';
+        apiKeyInput.placeholder = cfg.cloudVoice ? 'sk-â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢ (already set, leave blank to keep)' : 'sk-...';
         keyStatusEl.textContent = cfg.cloudVoice ? 'A key is currently configured.' : 'No key configured yet, using the free browser voice.';
         keyStatusEl.classList.toggle('ok', !!cfg.cloudVoice);
       })
@@ -320,7 +320,7 @@
 
   function saveSettings(extra) {
     saveStatusEl.classList.remove('error');
-    saveStatusEl.textContent = 'Saving…';
+    saveStatusEl.textContent = 'Savingâ€¦';
     const body = Object.assign(
       {
         apiKey: apiKeyInput.value.trim(),
