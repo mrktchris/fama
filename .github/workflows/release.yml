@@ -176,11 +176,10 @@ jobs:
       - name: Build universal macOS DMG and updater zip
         run: npm run dist:mac
         env:
-          # electron-builder signs when the repository owner provides a real
-          # Developer ID certificate. Without one it produces an honest
-          # unsigned build and the release notes state that limitation.
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          # Keep the public release unsigned until real Developer ID
+          # credentials are supplied. Passing an empty CSC_LINK makes
+          # electron-builder treat the workspace directory as a certificate
+          # path and fail instead of producing the documented unsigned build.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Block secrets and forbidden files in macOS payload
