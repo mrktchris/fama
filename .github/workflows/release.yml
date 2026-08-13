@@ -88,7 +88,7 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $installer = Get-Item "dist-desktop/Fama-Setup-$version.exe"
           Copy-Item $installer.FullName 'dist-desktop/Fama-Setup.exe' -Force
-          Compress-Archive -Path 'dist-desktop/Fama-win32-x64/*' -DestinationPath 'dist-desktop/Fama-win32-x64.zip' -Force
+          Compress-Archive -Path 'dist-desktop/win-unpacked/*' -DestinationPath 'dist-desktop/Fama-win32-x64.zip' -Force
 
           npm sbom --sbom-format cyclonedx | Out-File 'dist-desktop/fama-sbom.cdx.json' -Encoding utf8
           if ($LASTEXITCODE -ne 0) { throw 'SBOM generation failed.' }
