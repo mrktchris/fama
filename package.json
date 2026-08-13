@@ -1,6 +1,6 @@
 {
   "name": "fama",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "See and hear Claude Code and Codex work live. Local-first, zero required API calls, optional cloud voice with a persona/accent you control.",
   "author": "Christian Sierra",
   "main": "desktop/main.js",
