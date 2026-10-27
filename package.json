@@ -35,11 +35,11 @@
     "url": "https://github.com/mrktchris/fama.git"
   },
   "dependencies": {
-    "electron-updater": "6.8.9"
+    "electron-updater": "6.8.11"
   },
   "devDependencies": {
-    "electron": "43.3.0",
-    "electron-builder": "26.15.3"
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "com.chrissierra.fama",
